@@ -1,0 +1,8 @@
+// Copy Secrets.example.xcconfig to Secrets.xcconfig; never use a service-role key.
+#include? "Secrets.xcconfig"
+PRODUCT_BUNDLE_IDENTIFIER = de.davidwesthauser.sitescope
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SWIFT_VERSION = 5.0
+TARGETED_DEVICE_FAMILY = 1
+// Swift 6 data-race checking, reported as warnings while the target stays in Swift 5 mode.
+SWIFT_STRICT_CONCURRENCY = complete
