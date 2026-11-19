@@ -7,7 +7,7 @@ struct TrackingTipsView: View {
             Section {
                 Label("No LiDAR required", systemImage: "camera.viewfinder").font(.headline)
                 Text(
-                    "SiteAR uses the camera and motion sensors to map visual details. Good lighting and overlapping viewpoints help it find the room again."
+                    "sitescope uses the camera and motion sensors to map visual details. Good lighting and overlapping viewpoints help it find the room again."
                 )
             }
             Section("1 · Find detail") {

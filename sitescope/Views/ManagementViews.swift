@@ -36,10 +36,10 @@ struct AuthenticationView: View {
                 }
                 Section {
                     Text(
-                        "Camera access is requested only when opening AR. SiteAR supports camera-only world tracking; LiDAR is optional."
+                        "Camera access is requested only when opening AR. sitescope supports camera-only world tracking; LiDAR is optional."
                     ).font(.footnote)
                 }
-            }.navigationTitle("SiteAR")
+            }.navigationTitle("sitescope")
         }
     }
 }
@@ -516,7 +516,7 @@ struct SettingsView: View {
                     Label("Camera-only scanning tips", systemImage: "camera.viewfinder")
                 }
             }
-            Section("SiteAR \(Self.version)") {
+            Section("sitescope \(Self.version)") {
                 Text("Spatial work instructions · iOS 17+")
                 Text(
                     "Room recognition uses camera features from the saved scan. Lighting and texture affect accuracy. Check drawings against the physical room before work. Exported project files include room maps and images."
@@ -541,12 +541,12 @@ struct LocalDataRecoveryView: View {
                 Label("Saved data can't be opened", systemImage: "externaldrive.badge.exclamationmark")
             } description: {
                 Text(
-                    "SiteAR couldn't read the projects saved on this device. Nothing has been deleted. Starting fresh keeps the unreadable file as a backup in the app's data folder."
+                    "sitescope couldn't read the projects saved on this device. Nothing has been deleted. Starting fresh keeps the unreadable file as a backup in the app's data folder."
                 )
             } actions: {
                 Button("Start fresh, keep backup") { confirming = true }.buttonStyle(.borderedProminent)
             }
-            .navigationTitle("SiteAR")
+            .navigationTitle("sitescope")
             .confirmationDialog(
                 "Start with an empty project list? The unreadable file is moved to a backup, not deleted.",
                 isPresented: $confirming, titleVisibility: .visible

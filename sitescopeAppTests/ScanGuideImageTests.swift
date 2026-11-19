@@ -1,9 +1,9 @@
-#if canImport(UIKit) && !canImport(SiteARCore)
+#if canImport(UIKit) && !canImport(sitescopeCore)
     import XCTest
     import CoreVideo
     import ImageIO
     import UIKit
-    @testable import SiteAR
+    @testable import sitescope
 
     final class ScanGuideImageTests: XCTestCase {
         /// Synthetic camera-sized BGRA pixels, exclusively for the image encoder test.

@@ -1,8 +1,8 @@
-#if canImport(UIKit) && !canImport(SiteARCore)
+#if canImport(UIKit) && !canImport(sitescopeCore)
     import XCTest
     import UIKit
     import RealityKit
-    @testable import SiteAR
+    @testable import sitescope
 
     @MainActor final class SpatialImageAssetTests: XCTestCase {
         func testSavedImageLoadsAsTextureWithSourceDimensions() async throws {

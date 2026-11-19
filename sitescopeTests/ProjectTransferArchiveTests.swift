@@ -2,10 +2,10 @@ import CryptoKit
 import Foundation
 import XCTest
 
-#if canImport(SiteARCore)
-    @testable import SiteARCore
+#if canImport(sitescopeCore)
+    @testable import sitescopeCore
 #else
-    @testable import SiteAR
+    @testable import sitescope
 #endif
 
 final class ProjectTransferArchiveTests: XCTestCase {
@@ -35,7 +35,7 @@ final class ProjectTransferArchiveTests: XCTestCase {
 
     private func encode(_ manifest: ProjectTransferManifest, body: Data = Data()) throws -> URL {
         let json = try JSONEncoder().encode(manifest)
-        var result = Data("SiteAR01".utf8)
+        var result = Data("sscope01".utf8)
         var size = UInt64(json.count).littleEndian
         withUnsafeBytes(of: &size) { result.append(contentsOf: $0) }
         result.append(json)
@@ -154,7 +154,7 @@ final class ProjectTransferArchiveTests: XCTestCase {
             ProjectTransferManifest(version: 2, project: project, rooms: [], annotations: [], assets: []))
         XCTAssertThrowsError(
             try ProjectTransferArchive.read(from: file, extractTo: root.appendingPathComponent("imported")))
-        var data = Data("SiteAR01".utf8)
+        var data = Data("sscope01".utf8)
         var length = UInt64(16 * 1_048_576 + 1).littleEndian
         withUnsafeBytes(of: &length) { data.append(contentsOf: $0) }
         try data.write(to: file)

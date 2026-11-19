@@ -1,9 +1,9 @@
 import XCTest
 
-#if canImport(SiteARCore)
-    @testable import SiteARCore
+#if canImport(sitescopeCore)
+    @testable import sitescopeCore
 #else
-    @testable import SiteAR
+    @testable import sitescope
 #endif
 
 @MainActor final class StoreTests: XCTestCase {
@@ -171,7 +171,7 @@ extension StoreTests {
     }
 }
 
-#if !canImport(SiteARCore) && targetEnvironment(simulator)
+#if !canImport(sitescopeCore) && targetEnvironment(simulator)
     extension StoreTests {
         func testSavedShapesRenderCleanEdgesAndArrowHeadWithoutControlDots() throws {
             let room = Room(project_id: UUID(), name: "Rendering fixture")

@@ -1,8 +1,17 @@
 import SwiftUI
+import UIKit
 
-@main struct SiteARApp: App {
+@main struct SitescopeApp: App {
     @StateObject private var store = Store()
     @State private var importedProjectName: String?
+    init() {
+        #if DEBUG
+            /// UI tests pass this flag so transitions do not delay element queries; Release builds are unaffected.
+            if ProcessInfo.processInfo.arguments.contains("-disableAnimations") {
+                UIView.setAnimationsEnabled(false)
+            }
+        #endif
+    }
     var body: some Scene {
         WindowGroup {
             Group {
@@ -24,7 +33,7 @@ import SwiftUI
                 store.run { importedProjectName = try await store.importProjectFile(from: url).name }
             }
             .alert(
-                store.error == nil && importedProjectName != nil ? "Project imported" : "SiteAR",
+                store.error == nil && importedProjectName != nil ? "Project imported" : "sitescope",
                 isPresented: Binding(
                     get: { store.error != nil || importedProjectName != nil },
                     set: {

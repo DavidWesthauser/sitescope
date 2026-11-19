@@ -1,9 +1,9 @@
 import XCTest
 
-#if canImport(SiteARCore)
-    @testable import SiteARCore
+#if canImport(sitescopeCore)
+    @testable import sitescopeCore
 #else
-    @testable import SiteAR
+    @testable import sitescope
 #endif
 
 final class StubProtocol: URLProtocol {

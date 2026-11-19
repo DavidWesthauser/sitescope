@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "SiteARCore",
+    name: "sitescopeCore",
     platforms: [.macOS(.v14), .iOS(.v17)],
-    products: [.library(name: "SiteARCore", targets: ["SiteARCore"])],
+    products: [.library(name: "sitescopeCore", targets: ["sitescopeCore"])],
     targets: [
         .target(
-            name: "SiteARCore", path: "SiteAR", exclude: ["AR", "Views", "Resources", "App/SiteARApp.swift"],
+            name: "sitescopeCore", path: "sitescope", exclude: ["AR", "Views", "Resources", "App/SitescopeApp.swift"],
             sources: ["Core", "Services", "App/Store.swift"]),
-        .testTarget(name: "SiteARCoreTests", dependencies: ["SiteARCore"], path: "SiteARTests"),
-        .testTarget(name: "SiteARServiceTests", dependencies: ["SiteARCore"], path: "SiteARAppTests"),
+        .testTarget(name: "sitescopeCoreTests", dependencies: ["sitescopeCore"], path: "sitescopeTests"),
+        .testTarget(name: "sitescopeServiceTests", dependencies: ["sitescopeCore"], path: "sitescopeAppTests"),
     ],
     swiftLanguageModes: [.v5]
 )

@@ -1,10 +1,10 @@
-#if canImport(UIKit) && !canImport(SiteARCore)
+#if canImport(UIKit) && !canImport(sitescopeCore)
     import XCTest
     import UIKit
     import SwiftUI
     import ARKit
     import RealityKit
-    @testable import SiteAR
+    @testable import sitescope
 
     @MainActor final class ARLayoutTests: XCTestCase {
         private func sampleImage() -> UIImage {

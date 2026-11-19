@@ -29,7 +29,7 @@ public struct ProjectTransferAsset: Codable, Sendable {
     }
 }
 
-/// File format: the 8-byte magic `SiteAR01`, a little-endian UInt64 manifest length, the JSON manifest,
+/// File format: the 8-byte magic `sscope01`, a little-endian UInt64 manifest length, the JSON manifest,
 /// then each asset's raw bytes in manifest order. Every asset's SHA-256 is in the manifest and is
 /// verified on import, so a damaged or tampered archive is rejected instead of partially imported.
 public enum ProjectTransferArchive {
@@ -51,7 +51,7 @@ public enum ProjectTransferArchive {
         }
     }
     /// Exactly 8 bytes; `read` rejects any file whose first 8 bytes differ, so the format version is checked first.
-    private static let magic = Data("SiteAR01".utf8)
+    private static let magic = Data("sscope01".utf8)
     /// Large files are streamed in 1 MiB pieces so memory use stays bounded.
     private static let chunkSize = 1_048_576
     /// Size caps protect against oversized or hostile archives before anything is allocated or written.

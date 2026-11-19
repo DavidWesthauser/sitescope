@@ -30,9 +30,17 @@ private struct LocalData: Codable, Sendable {
         } catch {
             backend = nil
             #if DEBUG && os(iOS)
-                let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                    .appendingPathComponent("sitescope/local.json")
-                openLocal(at: url)
+                /// UI tests pass a per-run folder name so each test starts with its own empty local store.
+                let folder = ProcessInfo.processInfo.environment["SITESCOPE_LOCAL_DATA_DIR"]
+                var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("sitescope")
+                if let folder {
+                    directory =
+                        folder.hasPrefix("/")
+                        ? URL(fileURLWithPath: folder)
+                        : FileManager.default.temporaryDirectory.appendingPathComponent(folder)
+                }
+                openLocal(at: directory.appendingPathComponent("local.json"))
             #else
                 self.error = error.localizedDescription
             #endif
