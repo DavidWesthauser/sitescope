@@ -1,51 +1,48 @@
-# Deferred backend setup
+# Backend setup (Supabase)
 
-The current user-selected workflow uses local `.sitescope` export/import. **Do not perform these steps for the current local test.** This retained guide makes the existing backend schema and policies reproducible when cloud work resumes. Live deployment and policy acceptance are pending. Local projects and file imports do not automatically upload to cloud mode.
+Status: schema and policies exist but have **not been deployed or run yet** (T-003). New tables for houses, roles and comments will come as new timestamped migrations (`YYYYMMDDHHMM_name.sql`, run in filename order) (T-005, T-006, T-011). Keep this file in sync with `supabase/`.
 
-## Hosted development instance (future setup)
+## Hosted development project (dashboard, no CLI needed)
 
-Using the hosted dashboard is the simplest first test; no Supabase CLI, Docker or local server is needed.
+1. [Supabase Dashboard](https://supabase.com/dashboard) → new project (EU region, e.g. Frankfurt).
+2. **SQL Editor**: run each file in `supabase/migrations/` once, in filename order:
+   `202610230001_sitescope.sql`, `202610230002_scan_and_draw.sql`, `202610230003_images_and_strokes.sql`, `202610270004_scan_guide.sql`. Stop and fix on any error.
+3. Check **Table Editor**: `projects`, `memberships`, `rooms`, `annotations`. **Storage**: bucket `room-assets` exists and is **private**.
+4. **Authentication → Providers → Email**: enable email/password sign-up. For a test-only project you may disable *Confirm email*.
+5. **Connect** dialog: copy Project URL and **publishable** key (`sb_publishable_…`).
 
-1. Open [Supabase Dashboard](https://supabase.com/dashboard), sign in and create a **new development project**, for example `sitescope-test`. Choose a nearby European region, such as Frankfurt if offered. Wait for provisioning to finish.
-2. Open the project's **SQL Editor** and create a new query.
-3. On the Mac, open `supabase/migrations/202610230001_sitescope.sql` in a text editor. Copy **the entire file**, paste it into the SQL Editor, and click **Run**. Then run `supabase/migrations/202610230002_scan_and_draw.sql` the same way. Then run `supabase/migrations/202610230003_images_and_strokes.sql` and `supabase/migrations/202610270004_scan_guide.sql`. Run these migrations once each, in order, on the new project. It creates the tables, access policies, functions and private `room-assets` bucket. If it reports an error, resolve that before continuing; do not repeatedly rerun parts at random.
-4. In **Table Editor**, check that `projects`, `memberships`, `rooms` and `annotations` exist. In **Storage**, check that `room-assets` exists and is **private**. The bucket starts empty.
-5. Open **Authentication → Sign In / Providers** (or **Providers**, depending on the dashboard version), select **Email**, and allow email/password sign-up.
-6. For a dedicated first-test project, you can turn **Confirm Email** off and save. This lets you create test accounts without configuring email delivery. For production, enable confirmation and configure SMTP. If confirmation stays on, confirm the email before signing in. See [Supabase's email settings](https://supabase.com/docs/guides/auth/general-configuration).
-7. Open the project's **Connect** dialog and copy its **Project URL** and **publishable key**. Alternatively, find the key under **Settings → API Keys**. The URL looks like `https://abcdefghijklmnopqrst.supabase.co`; a new publishable key starts with `sb_publishable_`. See [Supabase's URL/key instructions](https://supabase.com/docs/guides/api/creating-routes).
+Never put a database password, secret key or service-role key into the app. Do not run `seed.sql` on the hosted project.
 
-Do **not** run `supabase/seed.sql` on this hosted project. It is for the local development stack only. Create your test users through the app. Do not copy a database password, secret API key or service-role key into the iOS app.
+## Configure the app
 
-## Configure the app for that instance
-
-1. In Finder, open this repository, then `sitescope/Resources`.
-2. Duplicate **`Secrets.example.xcconfig`** and name the copy exactly **`Secrets.xcconfig`**. Check that the filename is not `Secrets.xcconfig.txt`. Use a plain-text editor such as Xcode to edit it.
-3. Replace the two settings with your actual project values:
-
+1. Copy `sitescope/Resources/Secrets.example.xcconfig` to `sitescope/Resources/Secrets.xcconfig` (it is git-ignored).
+2. Fill in:
    ```xcconfig
    SUPABASE_URL = https:/$()/abcdefghijklmnopqrst.supabase.co
-   SUPABASE_ANON_KEY = sb_publishable_REPLACE_WITH_YOUR_ACTUAL_KEY
+   SUPABASE_ANON_KEY = sb_publishable_REPLACE_ME
    ```
+   Keep `https:/$()/` exactly — in xcconfig `//` starts a comment. No quotes. `Config.xcconfig` already includes the file.
 
-   Replace the example project reference and key. **Keep `https:/$()/` exactly as written**: Xcode expands it into `https://`; a literal `//` starts an xcconfig comment. Do not add quotes. The setting name `SUPABASE_ANON_KEY` is retained by this app even when its value is a newer publishable key. A legacy `anon` key is also supported.
-4. Save the file. `Config.xcconfig` already includes it; you do not need to add it to Copy Bundle Resources. It is ignored by Git.
-
-
-## Local test instance and seed
-
-Local Supabase (requires CLI and Docker):
+## Local stack with seed data (CLI + Docker)
 
 ```sh
 supabase start
-supabase db reset
-supabase test db
+supabase db reset   # applies migrations + supabase/seed.sql
+supabase test db    # runs supabase/tests/access.test.sql (pgTAP, 31 assertions)
 ```
 
-The seed creates `manager@sitescope.test`, `worker@sitescope.test`, `outsider@sitescope.test` with password `sitescope-local-2026!` and an **unmapped** fixture room. These identities are only for the local development stack. Never run seed.sql in production. No fake map or simulated AR event is used in the real application. The pgTAP test supplies synthetic spatial metadata inside a rolled-back SQL transaction exclusively to test access rules.
-
-To connect a physical iPhone to a local Supabase stack, expose it through a trusted HTTPS development endpoint and configure that URL. `localhost` on the phone is the phone itself. Prefer a separate hosted development project for the two-device AR test. Do not disable App Transport Security globally.
-
+Seed users (local only): `manager@sitescope.test`, `worker@sitescope.test`, `outsider@sitescope.test`, password `sitescope-local-2026!`, plus one unmapped fixture room. A real ARWorldMap cannot be seeded; maps come from scanning on a phone. A phone cannot reach `localhost` on the Mac; use the hosted project for device tests.
 
 ## Cloud UI test account
 
-In Xcode Edit Scheme → Test → Arguments → Environment Variables, set `sitescope_TEST_EMAIL` and `sitescope_TEST_PASSWORD` for a dedicated test account. Tests create/delete their own uniquely named project. The cloud test explicitly skips when credentials are absent; the local login bypass is not authentication verification. Sign out before testing login validation. Do not use a production account.
+Xcode → Edit Scheme → Test → Environment Variables: `sitescope_TEST_EMAIL`, `sitescope_TEST_PASSWORD` (dedicated test account). The cloud UI test skips without them. T-015 replaces this with a mocked backend.
+
+## Access model (current)
+
+| Actor | Rights |
+|---|---|
+| Owner (`projects.owner_id`) | Everything on own projects, `share_project(email)`, `revoke_worker` |
+| Member (`memberships`) | Read project, rooms, notes, files; change task status via `set_task_status` |
+| Anyone else | Nothing (RLS on tables and storage) |
+
+Published room maps are immutable (trigger `preserve_coordinates`); notes require a mapped room (`require_mapped_room`). Read/write/delete roles are planned in T-006.

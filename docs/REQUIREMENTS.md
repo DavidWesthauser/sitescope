@@ -1,53 +1,94 @@
-# Verifiable scope and effort
+# Requirements (combined)
 
-The current flow is scan → draw → save → export/import a local copy → recognize the room → restore drawings. There are no fixed markers or selected reference dots. Marker capture/detection and manual-reference recovery are removed; legacy JSON fields still decode. Plane outlines and the miniature show observed surfaces rather than whole-room coverage.
+Sources, condensed: our submitted requirements document (Anforderungen Projekt, incl. mockups), the Moodle *Projektbeschreibung* and the Moodle *Bewertungsschema* (both last changed 2026-10-23). Team of two → ~80 h per person, ~160 h total.
 
-**No backend is connected for the current workflow.** Local Debug installs and `.sitescope` transfers are the active scope. Supabase implementation remains in the repository for future activation; file sharing does not satisfy the course's mandatory cloud/account requirements. Implementation alone does not close physical or live-backend acceptance. See [verification](VERIFICATION.md).
+**IDs** (`M*`, `N*`, `G*`, `P*`) are referenced from tickets and STATUS.md.
 
-| Requirement | Observable acceptance | Current evidence / remaining work |
+## 1. Project idea
+
+sitescope scans a room in 3D. In that 3D space users place digital notes (drawings, area markings, images with title/description/priority/status). Notes are saved and can be reopened later: on site as an **AR view** through the camera, or anywhere else as a **3D model**.
+
+Technology: **Swift, native iOS (SwiftUI, ARKit, RealityKit)** · Backend: **Supabase**.
+
+Name: **sitescope**. The submitted requirements and mockups use SiteAR, the earlier working name.
+
+## 2. Project MUST-HAVEs (agreed with lecturer)
+
+| ID | Requirement (original German wording, shortened) | Meaning for us |
 |---|---|---|
-| Native iPhone app | Local Debug installation opens Projects on iOS 17+ without backend login | Build/simulator evidence; install the current revision on each physical phone |
-| Project/room management | Create, rename, delete and relaunch with correct project associations | Deterministic/UI persistence tests; current-device acceptance remains |
-| Camera-only mapping | Real map generated without scene depth on a compatible non-LiDAR iPhone | Physical camera-only test required |
-| Room world maps | Save/restore securely; imported map retains its matching sentinel coordinate anchor | Archive/state tests; physical cross-device recovery pending |
-| Drawings, areas and images | Room-relative poses/vertices and physical image dimensions survive save/relaunch/transfer | Geometry/serialization/disk tests; physical placement pending |
-| Task status | Editable local copy persists status through relaunch and export/import | Local tests; phone acceptance pending; no cross-copy live updates |
-| Map localization | Hide overlays until matching anchor and stable tracking; hide on loss; retry after timeout | State tests; physical recovery accuracy and failure testing pending |
-| Measured-distance placement | Explicit distance positions drawings when plane detection is insufficient | Geometry tests; physical placement pending; not a localization fallback |
-| Surface overview | Consolidate only near-coplanar overlapping miniature patches without moving saved coordinates | Model/budget tests; no full reconstruction or semantic room claim |
-| Scan animation | Native 0.45-second outline fade; miniature targets 30 Hz; static idle/pressure/Reduce Motion; outline re-meshing bounded per tick | Scheduling/budget tests; no measured phone FPS or crash-resolution claim |
-| Offline project transfer | Project details Export project → native AirDrop/Files; dashboard Import project or open `.sitescope`; separate editable copy | Disk/Store tests and [exact phone procedure](../README.md#transfer-a-project-to-the-technician-without-a-backend); two-phone physical test pending |
-| Transfer integrity | Reject unsafe/missing assets, corruption, invalid associations and oversized files; leave no partial project | Automated disk tests; imported real maps must still recover physically |
-| Accounts (course cloud scope) | Register, confirm, sign in, refresh and sign out against live service | Client fixtures exist; backend connection/live Auth deferred |
-| Secure cloud persistence (course scope) | Authorized two-user map/image/task access; outsider blocked; sharing/revocation enforced | Migrations/policy suite exist; live execution deferred; local files provide none of these guarantees |
-| Tests and documentation | Deterministic proof plus reproducible local installation and physical acceptance record | See VERIFICATION.md; do not count unperformed phone/backend steps as passed |
+| M1 | Erstellen, Bearbeiten, Speichern sowie Löschen (lokal und auf einem Server) von digitalen Raumnotizen | Full CRUD of room notes, both on device and in Supabase |
+| M2 | Nachträgliches Hochladen von Dateien, die ohne Internetzugang erstellt wurden | Offline-first: changes made offline queue up and upload automatically when back online |
+| M3 | Aufrufen von Raumnotizen als AR-Ansicht (vor Ort) sowie als 3D-Ansicht | AR walkthrough in the real room **and** a 3D model viewer usable anywhere |
+| M4 | Verwaltung von Accounts und deren Dateien auf einem Backend-Server | Accounts plus their maps/images/files stored in Supabase Auth/Storage |
+| M5 | Rollenverwaltung mit unterschiedlichen Rechten (Lesen, Schreiben, Löschen) bzgl. eines Projekts | Per-project roles with distinct read / write / delete rights, enforced server-side |
+| M6 | Einloggen auf einem Smartphone per Username und Passwort | Sign-in with username (email) and password |
+| M7 | Darkmode | Whole app usable and readable in dark appearance |
+| M8 | Kommentarfunktion zu Projekten, Häusern, Räumen (Bilder, Audio, Text) | Comments with text, image and audio on each hierarchy level |
+| M9 | Navigierbare Ordnerstruktur (Projekt – Häuser – Räume) | Three-level hierarchy: Project → House → Room |
 
-## Local transfer contract
+## 3. Project NICE-TO-HAVEs (no approval needed; list them in README with what/where)
 
-A `.sitescope` file contains a bounded UTF-8 manifest and raw map/image assets, streamed in chunks no larger than 1 MiB and checked with SHA256. Limits: 16 MiB manifest, 256 MiB per asset, 1 GiB total assets, 256 rooms, 2,000 annotations and 100,000 total geometry points. Inactive legacy marker files are excluded.
+| ID | Item |
+|---|---|
+| N1 | Language setting (at least German + English) |
+| N2 | Use LiDAR for precise 3D models of a room (optional mode; camera-only must keep working) |
+| N3 | Export function (3D file, video) |
+| N4 | Two-factor authentication |
 
-Import assigns new project/room/annotation IDs and rewrites asset paths, preserving each room's `coordinate_id`, world-map anchor relationship, annotation poses and vertices. Reimport creates another editable copy, not a merge. Existing projects remain separate. Recipients can retain/export their copies; there is no live sync, server authorization or remote revocation. Both phones need their own installed local Debug app. See the [README installation and transfer steps](../README.md).
+Further candidates from the mockups (only count if not already a MUST): live progress / activity feed, "download room maps on Wi-Fi only", backup export (already implemented as `.sitescope` file transfer), saved-view photo for recognition.
 
-## Deferred work
+## 4. General MUST-HAVEs (course, apply to every project)
 
-Cloud Anchors and Immersal are researched options only; no SDK, provider credentials or hosted/resolved anchors are integrated. Native ARWorldMap remains the active recovery method. A provider prototype, backend connection, live authorization, cloud synchronization, Android support, mesh reconstruction/occlusion, semantic room objects, push notifications and progress dashboards remain future scope. Scene depth is not requested on any device (nothing consumed it); a future LiDAR/RoomPlan mode would be optional and must not add a LiDAR requirement.
+| ID | Requirement | Key points |
+|---|---|---|
+| G1 | Mobile-first design, UI/UX | Follow Apple HIG; native navigation/controls; accessibility basics: readable font sizes, sufficient contrast, large enough touch targets |
+| G2 | Cloud data storage | Relevant app data persisted in the cloud backend |
+| G3 | User accounts and access protection | Registration + login; cloud data protected **server-side** (RLS / storage policies), not only in the app |
+| G4 | At least one native device feature | Integrated into a real workflow (we use camera/ARKit; plus photos, microphone). Permissions requested and denial handled |
+| G5 | Error handling and state management | Robust against no network, invalid input, unreachable API, denied permissions; clear feedback; loading states; no data/input loss on background or rotation |
+| G6 | Automated tests | Unit tests and UI/E2E tests covering relevant logic and main flows; reproducible |
+| G7 | Code quality and architecture | Understandable, maintainable; MVVM or comparable; UI, logic and data access clearly separated; reusable components; no duplication |
 
-Legacy pin/text/arrow records remain readable, but current creation tools are Draw, Area marking and Image. Do not count removed marker/manual recovery UI as a current feature. Preserve honest history of earlier work without claiming it as active acceptance.
+Technical rules: installable native app (no web app/PWA); BaaS preferred; Edge Functions allowed; no secret keys in the app or in Git (Supabase publishable/anon key is fine); `.gitignore` excludes build artifacts. Backend must be running with test data at grading time; setup reproducible from repo (schema, policies, settings, **seed data**) and documented in README. iOS install/testing arranged early with the lecturer.
 
-## 160–240 hour team budget
+## 5. Process rules
 
-The earlier 200-hour planning estimate included work on marker/manual recovery and cloud integration. Those are historical planning assumptions, superseded by the current marker-free local-file scope. The following remains a planning allocation, not measured time or proof of completed contributions:
+| ID | Rule |
+|---|---|
+| P1 | Git with a remote repo; lecturer (GitHub `behrends`) has read access (repo is public) |
+| P2 | **Both members commit regularly** from the technical start; small, meaningful commits and messages. Git history is used to judge individual contribution |
+| P3 | AI tools allowed, but no pure "vibe coding". AI code must be understood, reviewed and adapted |
+| P4 | README reflects AI use: tools, typical uses, and **per member at least one concrete example** where AI code was checked, corrected or rejected (with commit if possible) |
+| P5 | Handover meeting: every member explains architecture, decisions and their own code |
+| P6 | Milestones: mockups → requirements agreed → technical start → development/QA → in-class demo → handover meeting → submission via Moodle |
 
-| Work | Hours |
-|---|---:|
-| Setup, existing auth/Keychain and local navigation | 22 |
-| Projects, rooms and task forms | 26 |
-| Real map lifecycle and bounded local transfer | 28 |
-| Persistent annotations and observed surface geometry | 24 |
-| Marker-free relocalization and tracking verification | 34 |
-| Placement, interruptions and recovery errors | 16 |
-| Existing backend/policy work and deferred integration | 22 |
-| Two-device acceptance, documentation and fixes | 28 |
-| Total | 200 |
+## 6. Grading (100 points = 1.0)
 
-Use reviewable changes and record actual individual effort separately. The public sitescope repository is independent of unrelated parent-directory projects. Course cloud acceptance, physical two-phone accuracy and lecturer-approved scope still require evidence before submission.
+| Points | Category | What counts |
+|---:|---|---|
+| 50 | MUST-HAVEs (project + general) | Correct and complete; usable in the app; edge cases (invalid input, no data) handled without errors. Partial credit possible. Tests, code quality and UI/UX are graded only in their own categories |
+| 20 | NICE-TO-HAVEs | Only counted if MUST-HAVEs ≥ 40/50. Judged on usefulness, non-triviality, integration, stability. Must be described in README (what, where in the app). Trivial variants count less |
+| 10 | Automated tests | Meaningful unit tests for domain logic; **≥ 3 central user flows as UI/E2E tests, including ≥ 1 error case**; tests pass and are reproducible per README; cover edge cases and reading/writing persistent data; backend mocked or local emulator |
+| 20 | Quality and overall impression | See below |
+
+Quality aspects: **readability** (outsiders can follow; comments on non-trivial parts) · **structure** (clear responsibilities, folders, components) · **clean code & framework best practices** · **consistent style** (formatter/linter or consistent manual) · **development process** (continuous git history, transparent AI reflection) · **UI/UX** (intuitive, stable, platform conventions, loading/error states, accessibility; a **short user guide for non-obvious flows** like scanning/AR) · **overall impression** (no unfinished screens or makeshift solutions).
+
+A defect is deducted once, in the category it belongs to. Grade is per team; individual deductions only for clearly lower contribution.
+
+## 7. Mockup summary (target UX)
+
+Screens from the submitted mockups, used as the UI reference for tickets:
+
+1. **Sign in**: email, password, Sign in, Create account, "Use without an account on this iPhone". Camera access only requested when opening AR.
+2. **Projects**: searchable list with room count and sharing info ("shared with Alex", "3 people", "only you"). Sync status ("Synced just now").
+3. **Project detail**: rooms (with "Not mapped" / task count), Add room; **Team** (members with role and last activity), invite by email; Rename, Export backup (`.sitescope` file), Delete project and all rooms.
+4. **Room (unmapped)**: "Map this room first" → Map room, scanning tips; empty task list; Rename/Delete room.
+5. **Scan**: Cancel/Finish, "Walk around the room – 2/3 positions", LiDAR badge when available, "Room map saved".
+6. **Room (mapped)**: work progress (1 of 3), Start AR walkthrough, task list available without AR (title, kind, priority, status).
+7. **Recognition**: "Recognizing room…", saved view photo to match, then "Room recognized" and drawings appear.
+8. **Drawing**: Draw / Area / Image tools on a locked view; work details (title, description, priority).
+9. **Task detail**: instruction text, priority, status To do / In progress / Completed; offline save syncs later; completed drawings show green in AR.
+10. **Live progress** (manager): per-room progress, who is on site, activity feed.
+11. **Offline**: "No signal" banner, per-task "Waiting to sync"/"Synced"; conflicts show both versions after sync.
+12. **Team member**: role, "Can edit instructions", recent activity, Remove from project.
+13. **Settings**: account, sync status, Wi-Fi-only map downloads, projects saved on device, scanning tips, sign out.

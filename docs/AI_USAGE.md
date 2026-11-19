@@ -1,34 +1,39 @@
-# AI use and handover preparation
+# AI usage and handover preparation
 
-OpenAI Codex and, from 31 October 2026, Claude Code were used extensively for Swift/SwiftUI/ARKit implementation, Supabase migrations, tests, debugging and documentation. Focused subagents reviewed UI and tracking changes and implemented a small pure rendering-budget helper. Generated code was checked with compilation, deterministic tests, UI automation, screenshots and code review; physical AR and live backend acceptance remain separate.
+Course rule: AI tools are allowed, but every member must understand, review and be able to explain the code; the README must contain a short reflection and **one concrete example per member** (see REQUIREMENTS.md P3–P5, ticket T-019).
 
-Concrete examples of generated code that needed correction:
+## Tools used so far
 
-- Commit `88d4de7`: the first animated miniature could be invisible before its animation clock advanced. Screenshot review exposed this despite passing layout assertions. Existing geometry now renders immediately; `testMiniatureRendersWithoutAnAnimationClock` checks actual rendered pixels.
-- Commit `ece3928`: the frozen-view workflow allowed concurrent snapshot requests. Focused review identified a stale callback that could clear a valid drawing plane. `ViewCaptureRequest` now rejects duplicate/stale requests and cancels them on reset, resume, stop and tracking loss; a deterministic test covers the ordering.
-- Commit `ece3928`: a long-scan review found per-edge render entities, repeated searches and continuous unbounded miniature work. Display geometry is now sampled/bounded and batched, with pressure-driven detail reduction. Stress tests do not prove that the user's device crash is fixed.
+- **OpenAI Codex** (until 2026-10-31): large parts of the Swift/SwiftUI/ARKit implementation, Supabase migrations, tests and docs.
+- **Claude Code** (from 2026-10-31): performance/lifecycle review, refactoring, documentation and ticket planning.
 
-- 27 October 2026: focused review found that pending map bytes/publication survived a new AR coordinate origin. The fix adds MapSaveTransaction generation checks around asynchronous results, clears retry state on interruption/reset and distinguishes an already-saved late response from an unsaved failure. Deterministic tests cover the callback ordering; physical room accuracy is still unverified.
+Checks used on generated code: compilation with strict concurrency, deterministic unit tests, UI tests, screenshot review, code review. Physical AR and live backend behavior were **not** verified by these checks.
 
-- 27 October 2026: review found that a failed image reposition could reuse a previously selected photo, and that slow earlier selections could overwrite newer ones. Image request tokens, explicit draft clearing and simulator tests were added; this is a factual code-review example, not evidence of an individual student’s contribution.
+## Recorded corrections of AI-generated code
 
-- 31 October 2026: Claude Code (Anthropic) reviewed scan performance, lifecycle states and best practices against Apple's RealityKit/ARKit documentation (PR #1). Corrections made during that work: an inline `ViewThatFits` for the AR tools card was rejected before commit because its two view copies would reset an expanded disclosure and could oscillate; a measured-height scroll view keeps one identity. A modifier chain that exceeded the Swift type-checker was split into `ARSessionFeedback`. A recovery test first called a non-existent helper and was rewritten against the real async API. Simulator tests pass; phone frame rate, haptics and background resume remain unmeasured.
+Commit hashes (`88d4de7`, `ece3928`) are from the history before the 2026-11-05 squash and are not reachable in this repo.
 
-These are factual development examples, **not claims that either student personally performed the review or understands the code**. Both students' individual reflections are pending and must be written from their actual experience. Do not invent contribution histories, reviews or earlier commits.
+| When / commit | Problem in generated code | Fix |
+|---|---|---|
+| `88d4de7` | Animated scan miniature was invisible before its animation clock advanced; layout assertions still passed | Render existing geometry immediately; pixel test `testMiniatureRendersWithoutAnAnimationClock` |
+| `ece3928` | Concurrent snapshot requests in the locked-view flow; stale callback could clear a valid drawing plane | `ViewCaptureRequest` rejects stale/duplicate requests; ordering test |
+| `ece3928` | One render entity per edge, repeated searches, unbounded miniature work during long scans | Batched, bounded meshes and pressure-based detail reduction |
+| 2026-10-27 | Pending map bytes survived a reset of the AR coordinate origin | `MapSaveTransaction` generation checks; callback-ordering tests |
+| 2026-10-27 | Failed image reposition could reuse an old photo; slow selections overwrote newer ones | Image request tokens, explicit draft clearing |
+| 2026-10-31 | `ViewThatFits` for the AR tools card would reset state and oscillate; a modifier chain exceeded the type checker; a test called a non-existent helper | Rejected before commit; split into `ARSessionFeedback`; test rewritten against real API |
 
-For each student, record before submission:
+These are factual project examples, **not** personal reflections. Each member must still write their own (T-019):
 
-- Actual name, owned feature/files and genuine commits.
-- Which AI tool was used and for what.
-- One concrete suggestion/code fragment they personally checked, corrected or rejected; include the commit when available.
-- Their reasoning, test evidence and what they learned.
+- name, owned features/files, own commits
+- which AI tool, for what
+- one suggestion they personally checked, corrected or rejected (+ commit), their reasoning and what they learned
 
-Handover topics to understand and explain:
+## Handover topics every member should be able to explain
 
-1. Room coordinates, session coordinates and why transforms must be multiplied in the right order.
-2. Why loading an ARWorldMap alone does not prove alignment, and why drawings hide on tracking loss.
-3. Why imported project/room IDs change while coordinate IDs and room-relative poses remain unchanged; why ARWorldMap evidence is still needed before showing drawings. Physical-marker fallback has been removed from the current workflow.
-4. Which data lives in private Storage versus Postgres, and how RLS blocks outsiders.
-5. Local Debug mode versus required cloud persistence; what each automated test actually proves.
-6. Why bounded visualization can reduce workload without improving ARKit's recognition algorithm or changing annotation positions.
-7. Failure/lifecycle handling, remaining limitations and the physical acceptance procedure.
+1. Room vs. session coordinates and the transform order `sessionFromRoom × roomFromAnnotation`.
+2. Why loading an ARWorldMap is not proof of alignment; why notes hide on tracking loss.
+3. Why import creates new IDs but keeps `coordinate_id` and poses.
+4. What lives in Postgres vs. Storage, and how RLS blocks outsiders and limits roles.
+5. Local mode vs. cloud mode vs. offline sync; what each test suite actually proves.
+6. Error handling and lifecycle (background, interruption, permission denial).
+7. The layer structure (views → view models → repositories → backend/local store) after T-013.
