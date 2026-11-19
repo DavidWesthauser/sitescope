@@ -4,3 +4,8 @@ DerivedData/
 xcuserdata/
 **/Secrets.xcconfig
 .DS_Store
+*.xcresult
+.swiftpm/
+build/
+supabase/.temp/
+.env*
