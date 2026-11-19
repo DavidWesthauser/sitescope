@@ -11,7 +11,7 @@ Checks used on generated code: compilation with strict concurrency, deterministi
 
 ## Recorded corrections of AI-generated code
 
-Commit hashes refer to the pre-squash history (the current repo has a single `init` commit, so they are not reachable here).
+Commit hashes (`88d4de7`, `ece3928`) are from the history before the 2026-11-05 squash and are not reachable in this repo.
 
 | When / commit | Problem in generated code | Fix |
 |---|---|---|

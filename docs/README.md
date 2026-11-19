@@ -1,6 +1,6 @@
 # Docs index
 
-Start here. This folder is the single source of truth for the SiteAR course project (DHBW TIF24A, *Entwicklung mobiler Apps*, team: Leonard Aichele, David Westhauser). It is written so a person or an AI agent can pick up work without reading the whole codebase.
+Start here. This folder is the single source of truth for the sitescope course project (DHBW TIF24A, *Entwicklung mobiler Apps*, team: Leonard Aichele, David Westhauser). It is written so a person or an AI agent can pick up work without reading the whole codebase.
 
 | File | What it holds | Update when |
 |---|---|---|
@@ -16,9 +16,9 @@ Start here. This folder is the single source of truth for the SiteAR course proj
 
 ## Rules for keeping docs current
 
-1. **Tickets drive work.** Before coding, find or create the ticket. When done, set its `Status` to `done`, tick the acceptance criteria and update the index table in `tickets/README.md`.
+1. **Tickets drive work.** Before coding, find or create the ticket. Change its `Status:` line and run `python3 scripts/tickets.py`, which moves it into `todo/`, `in-progress/` or `done/` and regenerates the index.
 2. **STATUS.md reflects reality.** After finishing a ticket, update the matching row in STATUS.md. Never mark something done that wasn't run or tested; say "implemented, unverified" instead.
 3. **Requirements are fixed.** Do not edit the agreed MUST-HAVEs in REQUIREMENTS.md without lecturer agreement. NICE-TO-HAVEs may be added.
 4. **Keep files short.** Prefer a table row or bullet over a paragraph. Remove outdated text instead of appending "update" sections; git keeps the history.
-5. **Names and paths:** the app, source folders and Xcode project are **SiteAR**; the repository is `sitescope`. Some identifiers keep the old name for compatibility (see AGENTS.md).
+5. **Names and paths:** everything is named **sitescope**: app, repository, source folders (`sitescope/`, `sitescopeTests/`, …), Xcode project and scheme, package module `sitescopeCore`. The mockups still say SiteAR, the earlier working name.
 6. Dates are absolute (YYYY-MM-DD).

@@ -6,9 +6,11 @@ Sources, condensed: our submitted requirements document (Anforderungen Projekt, 
 
 ## 1. Project idea
 
-SiteAR scans a room in 3D. In that 3D space users place digital notes (drawings, area markings, images with title/description/priority/status). Notes are saved and can be reopened later: on site as an **AR view** through the camera, or anywhere else as a **3D model**.
+sitescope scans a room in 3D. In that 3D space users place digital notes (drawings, area markings, images with title/description/priority/status). Notes are saved and can be reopened later: on site as an **AR view** through the camera, or anywhere else as a **3D model**.
 
 Technology: **Swift, native iOS (SwiftUI, ARKit, RealityKit)** · Backend: **Supabase**.
+
+Name: **sitescope**. The submitted requirements and mockups use SiteAR, the earlier working name.
 
 ## 2. Project MUST-HAVEs (agreed with lecturer)
 
@@ -33,7 +35,7 @@ Technology: **Swift, native iOS (SwiftUI, ARKit, RealityKit)** · Backend: **Sup
 | N3 | Export function (3D file, video) |
 | N4 | Two-factor authentication |
 
-Further candidates from the mockups (only count if not already a MUST): live progress / activity feed, "download room maps on Wi-Fi only", `.sitear` backup export (already partly implemented as `.sitescope` file transfer), saved-view photo for recognition.
+Further candidates from the mockups (only count if not already a MUST): live progress / activity feed, "download room maps on Wi-Fi only", backup export (already implemented as `.sitescope` file transfer), saved-view photo for recognition.
 
 ## 4. General MUST-HAVEs (course, apply to every project)
 
@@ -79,7 +81,7 @@ Screens from the submitted mockups, used as the UI reference for tickets:
 
 1. **Sign in**: email, password, Sign in, Create account, "Use without an account on this iPhone". Camera access only requested when opening AR.
 2. **Projects**: searchable list with room count and sharing info ("shared with Alex", "3 people", "only you"). Sync status ("Synced just now").
-3. **Project detail**: rooms (with "Not mapped" / task count), Add room; **Team** (members with role and last activity), invite by email; Rename, Export backup (`.sitear`), Delete project and all rooms.
+3. **Project detail**: rooms (with "Not mapped" / task count), Add room; **Team** (members with role and last activity), invite by email; Rename, Export backup (`.sitescope` file), Delete project and all rooms.
 4. **Room (unmapped)**: "Map this room first" → Map room, scanning tips; empty task list; Rename/Delete room.
 5. **Scan**: Cancel/Finish, "Walk around the room – 2/3 positions", LiDAR badge when available, "Room map saved".
 6. **Room (mapped)**: work progress (1 of 3), Start AR walkthrough, task list available without AR (title, kind, priority, status).

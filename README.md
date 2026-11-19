@@ -1,4 +1,4 @@
-# SiteAR
+# sitescope
 
 Room notes that stay where the work is. You scan a room once with the iPhone camera, then draw instructions, mark areas and pin images onto walls and surfaces. Later a colleague opens the same room: when the phone recognizes it, every note appears in place. Tasks also work without AR.
 
@@ -22,7 +22,7 @@ Native iOS 17+ (SwiftUI, ARKit, RealityKit), LiDAR not required, no third-party 
 ## Install on an iPhone
 
 1. In Xcode, sign in under **Settings → Accounts**. Connect the iPhone and trust the Mac. Turn on **Developer Mode** on the phone.
-2. Open `SiteAR.xcodeproj`. In **Signing & Capabilities**, choose your team and a unique bundle ID.
+2. Open `sitescope.xcodeproj`. In **Signing & Capabilities**, choose your team and a unique bundle ID.
 3. Use a **Debug** build without `Secrets.xcconfig` for local-only mode, or set up the backend first (see BACKEND_SETUP.md). Then run on the phone.
 4. Allow camera access when you open **Map room**. Keep Xcode's device screen mirroring off, because it blocks the camera.
 
@@ -37,7 +37,7 @@ Native iOS 17+ (SwiftUI, ARKit, RealityKit), LiDAR not required, no third-party 
 
 ```sh
 swift test                                   # core logic, portable
-xcodebuild -project SiteAR.xcodeproj -scheme SiteAR \
+xcodebuild -project sitescope.xcodeproj -scheme sitescope \
   -destination 'platform=iOS Simulator,name=iPhone 17' test
 supabase start && supabase db reset && supabase test db   # RLS policies
 ```

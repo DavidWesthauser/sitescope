@@ -1,12 +1,12 @@
 # Backend setup (Supabase)
 
-Status: schema and policies exist but have **not been deployed or run yet** (T-003). New tables for houses, roles and comments will be added as migrations 005+ (T-005, T-006, T-011). Keep this file in sync with `supabase/`.
+Status: schema and policies exist but have **not been deployed or run yet** (T-003). New tables for houses, roles and comments will come as new timestamped migrations (`YYYYMMDDHHMM_name.sql`, run in filename order) (T-005, T-006, T-011). Keep this file in sync with `supabase/`.
 
 ## Hosted development project (dashboard, no CLI needed)
 
 1. [Supabase Dashboard](https://supabase.com/dashboard) → new project (EU region, e.g. Frankfurt).
 2. **SQL Editor**: run each file in `supabase/migrations/` once, in filename order:
-   `202610230001_sitear.sql`, `202610230002_scan_and_draw.sql`, `202610230003_images_and_strokes.sql`, `202610270004_scan_guide.sql`. Stop and fix on any error.
+   `202610230001_sitescope.sql`, `202610230002_scan_and_draw.sql`, `202610230003_images_and_strokes.sql`, `202610270004_scan_guide.sql`. Stop and fix on any error.
 3. Check **Table Editor**: `projects`, `memberships`, `rooms`, `annotations`. **Storage**: bucket `room-assets` exists and is **private**.
 4. **Authentication → Providers → Email**: enable email/password sign-up. For a test-only project you may disable *Confirm email*.
 5. **Connect** dialog: copy Project URL and **publishable** key (`sb_publishable_…`).
@@ -15,7 +15,7 @@ Never put a database password, secret key or service-role key into the app. Do n
 
 ## Configure the app
 
-1. Copy `SiteAR/Resources/Secrets.example.xcconfig` to `SiteAR/Resources/Secrets.xcconfig` (git-ignored once T-002 is done — check `git status`!).
+1. Copy `sitescope/Resources/Secrets.example.xcconfig` to `sitescope/Resources/Secrets.xcconfig` (it is git-ignored).
 2. Fill in:
    ```xcconfig
    SUPABASE_URL = https:/$()/abcdefghijklmnopqrst.supabase.co

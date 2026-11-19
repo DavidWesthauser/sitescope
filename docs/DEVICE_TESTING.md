@@ -6,7 +6,7 @@ Before starting: install via Xcode (Developer Mode on, signing set). **Keep Xcod
 
 ## 1. Single phone: scan → draw → recognize
 
-1. Create project and room → **Map room**. Move slowly over textured walls/floor. Thin outlines appear; Finish stays disabled until ready (4 directions × 3 positions, each held ~1 s). Spinning in place must not complete it.
+1. Create project and room → **Map room**. Move slowly over textured walls/floor. Thin outlines appear; Finish stays disabled until ready (4 directions × 3 positions, each held 0.75 s). Spinning in place must not complete it.
 2. **Finish** → continues into drawing in the same session.
 3. **Lock view** on a wall. Moving the phone must not move the frozen view. Test **Draw** (two separate strokes, no connecting line, Undo removes one), **Area** (3–4 corners), **Image** (photo + transparent PNG, adjust width). Fill work details, save.
 4. Close AR, force-quit, relaunch → **Start AR walkthrough**. Drawings stay hidden until "Room recognized", then appear in the right place. Walk around and estimate error (target e.g. ≤ 10 cm).

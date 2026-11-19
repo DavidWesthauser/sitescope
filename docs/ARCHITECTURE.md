@@ -6,17 +6,17 @@ Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies.
 
 | Path | Responsibility |
 |---|---|
-| `SiteAR/App/SiteARApp.swift` | Entry point; picks login / dashboard / data-recovery screen; handles opened project files |
-| `SiteAR/App/Store.swift` | Main-actor app state. Local JSON persistence **or** cloud calls (`if isLocalMode`), project file import/export |
-| `SiteAR/Services/Backend.swift` | Supabase REST/Auth/Storage client, token refresh, Keychain session (`Vault`). Only the publishable key; RLS applies to every call |
-| `SiteAR/Core/` | Pure, testable value types: `Models` (+ validation), `Spatial` (poses, alignment), `Scanning` (coverage gates), `TrackingQuality`, `DrawingGeometry`, `FreehandDraft`, `MapSaveTransaction`, `ProjectTransferArchive`, `RoomSurfaceModel`, `ScanRenderingBudget`, `ScanVisualization` |
-| `SiteAR/AR/` | `ARController` (session lifecycle, tracking) with extensions `+Drawing`, `+Persistence` (map save, image load), `+Rendering` (instructions), `+Surfaces` (plane outlines); image/scan-guide helpers |
-| `SiteAR/Views/` | `ManagementViews` (auth, projects, rooms, tasks, members, settings), `ARScreen`, drawing/scan overlays, transfer UI, tips |
-| `SiteAR/Resources/` | `Info.plist`, `Config.xcconfig` (+ git-ignored `Secrets.xcconfig`) |
+| `sitescope/App/SitescopeApp.swift` | Entry point; picks login / dashboard / data-recovery screen; handles opened project files |
+| `sitescope/App/Store.swift` | Main-actor app state. Local JSON persistence **or** cloud calls (`if isLocalMode`), project file import/export |
+| `sitescope/Services/Backend.swift` | Supabase REST/Auth/Storage client, token refresh, Keychain session (`Vault`). Only the publishable key; RLS applies to every call |
+| `sitescope/Core/` | Pure, testable value types: `Models` (+ validation), `Spatial` (poses, alignment), `Scanning` (coverage gates), `TrackingQuality`, `DrawingGeometry`, `FreehandDraft`, `MapSaveTransaction`, `ProjectTransferArchive`, `RoomSurfaceModel`, `ScanRenderingBudget`, `ScanVisualization` |
+| `sitescope/AR/` | `ARController` (session lifecycle, tracking) with extensions `+Drawing`, `+Persistence` (map save, image load), `+Rendering` (instructions), `+Surfaces` (plane outlines); image/scan-guide helpers |
+| `sitescope/Views/` | `ManagementViews` (auth, projects, rooms, tasks, members, settings), `ARScreen`, drawing/scan overlays, transfer UI, tips |
+| `sitescope/Resources/` | `Info.plist`, `Config.xcconfig` (+ git-ignored `Secrets.xcconfig`) |
 | `supabase/` | Migrations, local seed, pgTAP access tests |
-| `SiteARTests/` | Portable core tests (`swift test`) |
-| `SiteARAppTests/` | Store/backend fixtures, AR layout/render tests (simulator) |
-| `SiteARUITests/` | UI workflows |
+| `sitescopeTests/` | Portable core tests (`swift test`) |
+| `sitescopeAppTests/` | Store/backend fixtures, AR layout/render tests (simulator) |
+| `sitescopeUITests/` | UI workflows |
 | `scripts/generate_project.py` | Regenerates the Xcode project deterministically |
 
 ## Data model
@@ -29,7 +29,7 @@ Cloud adds `memberships (project_id, user_id)`: owner = manager (full rights), m
 
 - **Local mode** (Debug build without backend config): `Application Support/sitescope/local.json` plus `assets/<project>/<room>/...` (world maps, PNG images). Writes are encoded off the main actor, serialized, atomic, and applied in memory only after success. Unreadable JSON → recovery screen that moves the file to a backup.
 - **Cloud mode**: tables via PostgREST, files in the private `room-assets` bucket at `<project>/<room>/...`. No offline cache or queue yet (T-008).
-- **Transfer file** (`.sitescope`): magic `SiteAR01` (8 bytes), UInt64 manifest length, JSON manifest, raw assets streamed in ≤ 1 MiB chunks with SHA-256. Limits: 16 MiB manifest, 256 MiB/asset, 1 GiB total, 256 rooms, 2,000 annotations, 100,000 points. Import validates everything, creates new IDs, keeps `coordinate_id` and poses, and rolls back on failure.
+- **Transfer file** (`.sitescope`): magic `sscope01` (8 bytes), UInt64 manifest length, JSON manifest, raw assets streamed in ≤ 1 MiB chunks with SHA-256. Limits: 16 MiB manifest, 256 MiB/asset, 1 GiB total, 256 rooms, 2,000 annotations, 100,000 points. Import validates everything, creates new IDs, keeps `coordinate_id` and poses, and rolls back on failure.
 
 ## Spatial contract
 

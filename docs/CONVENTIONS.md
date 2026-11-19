@@ -5,9 +5,9 @@ Rules every change follows. `swift format` checks the layout automatically; the 
 ## Formatting (automatic)
 
 - Tool: `swift format` (bundled with Xcode 16+), configured in `.swift-format`: 4-space indent, 120-character lines, no semicolons, one statement and one variable declaration per line.
-- Format: `swift format --in-place --recursive SiteAR SiteARTests SiteARAppTests SiteARUITests Package.swift`
-- Lint: `swift format lint --strict --recursive SiteAR SiteARTests SiteARAppTests SiteARUITests Package.swift` must report nothing before a commit.
-- Disabled rules and why: `AlwaysUseLowerCamelCase` (model fields such as `owner_id` mirror Supabase columns and JSON keys), `UseSynthesizedInitializer` (public memberwise inits are API of the `SiteARCore` package).
+- Format: `swift format --in-place --recursive sitescope sitescopeTests sitescopeAppTests sitescopeUITests Package.swift`
+- Lint: `swift format lint --strict --recursive sitescope sitescopeTests sitescopeAppTests sitescopeUITests Package.swift` must report nothing before a commit.
+- Disabled rules and why: `AlwaysUseLowerCamelCase` (model fields such as `owner_id` mirror Supabase columns and JSON keys), `UseSynthesizedInitializer` (public memberwise inits are API of the `sitescopeCore` package).
 
 ## Language
 
@@ -26,7 +26,7 @@ Rules every change follows. `swift format` checks the layout automatically; the 
 ## Structure
 
 - Layers: Views (SwiftUI, no networking or file I/O) → view models / `Store` → repositories and services (`Backend`, local storage) → pure `Core` types. Views never call `Backend` directly (T-013).
-- Pure logic lives in `SiteAR/Core/` and has unit tests. No `ARKit`/`UIKit` imports there.
+- Pure logic lives in `sitescope/Core/` and has unit tests. No `ARKit`/`UIKit` imports there.
 - One screen or one clear responsibility per file; split files that grow past roughly 300 lines.
 - No duplicated logic: extract a shared helper instead of copying.
 
