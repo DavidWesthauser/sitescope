@@ -1,21 +1,26 @@
 import XCTest
-#if canImport(sitescopeCore)
-@testable import sitescopeCore
+
+#if canImport(SiteARCore)
+    @testable import SiteARCore
 #else
-@testable import sitescope
+    @testable import SiteAR
 #endif
 
 final class MapSaveTransactionTests: XCTestCase {
     func testSuccessfulLatePublicationRequiresRecoveryInsteadOfAnUnsavedRetry() throws {
-        var transaction=MapSaveTransaction()
-        let original=transaction.generation
+        var transaction = MapSaveTransaction()
+        let original = transaction.generation
         try transaction.validateCompletion(original)
         transaction.reset()
         XCTAssertThrowsError(try transaction.validate(original)) { error in
-            guard case MapSaveTransaction.Failure.sessionChanged = error else { return XCTFail("Expected interrupted capture") }
+            guard case MapSaveTransaction.Failure.sessionChanged = error else {
+                return XCTFail("Expected interrupted capture")
+            }
         }
         XCTAssertThrowsError(try transaction.validateCompletion(original)) { error in
-            guard case MapSaveTransaction.Failure.savedSessionChanged = error else { return XCTFail("Expected saved-room recovery") }
+            guard case MapSaveTransaction.Failure.savedSessionChanged = error else {
+                return XCTFail("Expected saved-room recovery")
+            }
         }
     }
     private func room() -> Room {

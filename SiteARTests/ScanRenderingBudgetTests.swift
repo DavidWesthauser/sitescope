@@ -1,14 +1,17 @@
 import XCTest
 import simd
-#if canImport(sitescopeCore)
-@testable import sitescopeCore
+
+#if canImport(SiteARCore)
+    @testable import SiteARCore
 #else
-@testable import sitescope
+    @testable import SiteAR
 #endif
 
 final class ScanRenderingBudgetTests: XCTestCase {
-    private let square = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3<Float>(1, 0, 0)),
-                          Point3(SIMD3<Float>(1, 0, 1)), Point3(SIMD3<Float>(0, 0, 1))]
+    private let square = [
+        Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3<Float>(1, 0, 0)),
+        Point3(SIMD3<Float>(1, 0, 1)), Point3(SIMD3<Float>(0, 0, 1)),
+    ]
 
     func testBoundarySamplingIsBoundedOrderedAndDoesNotChangeSource() {
         let source = (0..<240).map { index in
@@ -35,8 +38,9 @@ final class ScanRenderingBudgetTests: XCTestCase {
         let patches = try (1...40).map { value -> SurfacePatch in
             var matrix = matrix_identity_float4x4
             matrix.columns.3.x = Float(value)
-            return SurfacePatch(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", value))!,
-                                pose: try Pose(matrix), vertices: square, vertical: false)
+            return SurfacePatch(
+                id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", value))!,
+                pose: try Pose(matrix), vertices: square, vertical: false)
         }
         let selected = ScanRenderingBudget.visiblePatches(Array(patches.reversed()), camera: .zero)
         XCTAssertEqual(selected.map(\.id), Array(patches.prefix(24)).map(\.id))
@@ -46,9 +50,12 @@ final class ScanRenderingBudgetTests: XCTestCase {
         XCTAssertTrue(ScanRenderingBudget.visiblePatches(patches, camera: SIMD3(.nan, 0, 0)).isEmpty)
         XCTAssertTrue(ScanRenderingBudget.visiblePatches(patches, camera: .zero, maximum: 0).isEmpty)
 
-        var first = patches[0], second = patches[1]
-        first.pose = .identity; second.pose = .identity
-        XCTAssertEqual(ScanRenderingBudget.visiblePatches([second, first], camera: .zero).map(\.id), [first.id, second.id])
+        var first = patches[0]
+        var second = patches[1]
+        first.pose = .identity
+        second.pose = .identity
+        XCTAssertEqual(
+            ScanRenderingBudget.visiblePatches([second, first], camera: .zero).map(\.id), [first.id, second.id])
     }
 
     func testRevealUsesPerimeterDistanceAndEndsAtExpectedPosition() throws {
@@ -80,6 +87,8 @@ final class ScanRenderingBudgetTests: XCTestCase {
         XCTAssertNil(ScanRenderingBudget.outline(square, thickness: .nan))
         XCTAssertNil(ScanRenderingBudget.outline(square, thickness: 0.004, reveal: .nan))
         XCTAssertNil(ScanRenderingBudget.outline([Point3(.zero), Point3(.zero)], thickness: 0.004))
-        XCTAssertNil(ScanRenderingBudget.outline([Point3(.zero), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(2, 0, 0))], thickness: 0.004))
+        XCTAssertNil(
+            ScanRenderingBudget.outline(
+                [Point3(.zero), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(2, 0, 0))], thickness: 0.004))
     }
 }

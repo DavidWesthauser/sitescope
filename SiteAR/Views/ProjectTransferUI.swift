@@ -3,9 +3,11 @@ import UIKit
 import UniformTypeIdentifiers
 
 extension UTType {
+    /// Document type of exported project files. The identifier is part of the file format; keep it stable.
     static let sitescopeProject = UTType(exportedAs: "de.davidwesthauser.sitescope.project", conformingTo: .data)
 }
 
+/// Button that exports the project as a file and opens the share sheet for it.
 struct ProjectFileShareButton: View {
     let project: Project
     @EnvironmentObject private var store: Store
@@ -50,8 +52,9 @@ struct ProjectFileShareButton: View {
         let temporaryRoot = FileManager.default.temporaryDirectory.standardizedFileURL.resolvingSymlinksInPath()
         let prefix = "sitescope-Export-"
         guard directory.deletingLastPathComponent().path == temporaryRoot.path,
-              directory.lastPathComponent.hasPrefix(prefix),
-              UUID(uuidString: String(directory.lastPathComponent.dropFirst(prefix.count))) != nil else { return nil }
+            directory.lastPathComponent.hasPrefix(prefix),
+            UUID(uuidString: String(directory.lastPathComponent.dropFirst(prefix.count))) != nil
+        else { return nil }
         return directory
     }
 }
@@ -79,7 +82,8 @@ private struct ProjectActivityPresenter: UIViewControllerRepresentable {
         }
         func presentIfReady() {
             guard let url = requestedURL, activeURL == nil,
-                  viewIfLoaded?.window != nil, presentedViewController == nil else { return }
+                viewIfLoaded?.window != nil, presentedViewController == nil
+            else { return }
             activeURL = url
             let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
             activity.completionWithItemsHandler = { [weak self] _, _, _, _ in
@@ -92,7 +96,9 @@ private struct ProjectActivityPresenter: UIViewControllerRepresentable {
             activity.presentationController?.delegate = self
         }
         func presentationControllerDidDismiss(_ presentationController: UIPresentationController) { finish() }
-        func popoverPresentationControllerDidDismissPopover(_ popoverPresentationController: UIPopoverPresentationController) { finish() }
+        func popoverPresentationControllerDidDismissPopover(
+            _ popoverPresentationController: UIPopoverPresentationController
+        ) { finish() }
         private func finish() {
             guard activeURL != nil else { return }
             requestedURL = nil

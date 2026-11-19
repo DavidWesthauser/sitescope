@@ -2,5 +2,5 @@
 DerivedData/
 *.xcuserstate
 xcuserdata/
-sitescope/Resources/Secrets.xcconfig
+**/Secrets.xcconfig
 .DS_Store

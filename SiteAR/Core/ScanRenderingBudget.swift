@@ -3,10 +3,14 @@ import simd
 
 /// Display-only geometry. Never use these samples to replace a saved map or annotation.
 public enum ScanRenderingBudget {
+    /// Caps how many patches are drawn per frame so the overlay stays within the AR frame budget.
     public static let maximumPatches = 24
+    /// Caps the outline polygon size; boundaries are resampled rather than drawn at full resolution.
     public static let maximumBoundaryVertices = 24
+    /// Hard ceiling on caller-supplied boundary sizes, so the boundary work per patch stays small.
     public static let maximumCachedBoundaryVertices = 64
 
+    /// Indexed triangles for a box-based outline; `indices` come in triples, one triple per triangle.
     public struct OutlineMesh: Sendable {
         public let positions: [SIMD3<Float>]
         public let indices: [UInt32]
@@ -27,14 +31,16 @@ public enum ScanRenderingBudget {
             distinct.append(point)
         }
         if let first = distinct.first, let last = distinct.last,
-           distinct.count > 1, simd_distance_squared(first.vector, last.vector) <= 0.0000000001 {
+            distinct.count > 1, simd_distance_squared(first.vector, last.vector) <= 0.0000000001
+        {
             distinct.removeLast()
         }
         guard distinct.count >= 3 else { return [] }
         var area = SIMD3<Float>.zero
         for index in 1..<(distinct.count - 1) {
-            area += simd_cross(distinct[index].vector - distinct[0].vector,
-                               distinct[index + 1].vector - distinct[0].vector)
+            area += simd_cross(
+                distinct[index].vector - distinct[0].vector,
+                distinct[index + 1].vector - distinct[0].vector)
         }
         guard finite(area), simd_length_squared(area) > 0.000000000001 else { return [] }
         guard distinct.count > limit else { return distinct }
@@ -42,7 +48,9 @@ public enum ScanRenderingBudget {
     }
 
     /// Nearest sampled boundary centroids, with UUID tie-breaking independent of input order.
-    public static func visiblePatches(_ patches: [SurfacePatch], camera: SIMD3<Float>, maximum: Int = 24) -> [SurfacePatch] {
+    public static func visiblePatches(_ patches: [SurfacePatch], camera: SIMD3<Float>, maximum: Int = 24)
+        -> [SurfacePatch]
+    {
         let limit = min(maximum, maximumPatches)
         guard limit > 0, finite(camera) else { return [] }
 
@@ -82,8 +90,10 @@ public enum ScanRenderingBudget {
         var edges: [(start: SIMD3<Float>, direction: SIMD3<Float>, length: Float)] = []
         var perimeter: Float = 0
         for index in boundary.indices {
-            let start = boundary[index], end = boundary[(index + 1) % boundary.count]
-            let delta = end - start, length = simd_length(delta)
+            let start = boundary[index]
+            let end = boundary[(index + 1) % boundary.count]
+            let delta = end - start
+            let length = simd_length(delta)
             guard length.isFinite else { return nil }
             guard length > 0.00001 else { continue }
             edges.append((start, delta / length, length))
@@ -96,10 +106,11 @@ public enum ScanRenderingBudget {
         var indices: [UInt32] = []
         positions.reserveCapacity(edges.count * 8)
         indices.reserveCapacity(edges.count * 36)
+        // Twelve triangles per box; corners 0-3 sit at the edge start, 4-7 at the edge end.
         let boxIndices: [UInt32] = [
             0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
             0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5,
-            2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7
+            2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7,
         ]
         for edge in edges {
             guard remaining > 0.00001 else { break }
@@ -112,7 +123,7 @@ public enum ScanRenderingBudget {
             let corners = [
                 edge.start - side - up, edge.start + side - up,
                 edge.start + side + up, edge.start - side + up,
-                end - side - up, end + side - up, end + side + up, end - side + up
+                end - side - up, end + side - up, end + side + up, end - side + up,
             ]
             guard corners.allSatisfy(finite) else { return nil }
             let base = UInt32(positions.count)

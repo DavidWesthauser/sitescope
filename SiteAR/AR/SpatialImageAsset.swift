@@ -1,6 +1,6 @@
-import UIKit
 import ImageIO
 import RealityKit
+import UIKit
 
 @MainActor struct PreparedSpatialImage {
     let data: Data
@@ -9,6 +9,7 @@ import RealityKit
 }
 @MainActor enum SpatialImageAsset {
     /// Existing assets need a GPU texture, not another PNG export on the AR callback queue.
+    /// The 30 MB input cap runs before decoding, and the 1024 px thumbnail bounds texture memory.
     static func loadTexture(_ data: Data) async throws -> TextureResource {
         try Task.checkCancellation()
         guard data.count <= 30_000_000 else {
@@ -17,14 +18,17 @@ import RealityKit
         let decoding = Task.detached(priority: .userInitiated) { () throws -> CGImage in
             try Task.checkCancellation()
             guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    // Display textures need less memory than the saved 2048px source image.
-                    kCGImageSourceThumbnailMaxPixelSize: 1024,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceShouldCacheImmediately: true
-                  ] as CFDictionary) else {
-                throw AppError.message("This image could not be loaded (maximum 30 MB).")
+                let image = CGImageSourceCreateThumbnailAtIndex(
+                    source, 0,
+                    [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        // Display textures need less memory than the saved 2048px source image.
+                        kCGImageSourceThumbnailMaxPixelSize: 1024,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceShouldCacheImmediately: true,
+                    ] as CFDictionary)
+            else {
+                throw AppError.message("This image could not be read. Use a PNG or JPEG file.")
             }
             try Task.checkCancellation()
             return image
@@ -46,25 +50,39 @@ import RealityKit
     }
 
     /// Decoding and the 2048 px PNG encode take hundreds of milliseconds, so they run off the main actor;
-    /// only the texture upload stays here.
+    /// only the texture upload stays here. The 2048 px decode limit caps the PNG written to storage.
     static func prepare(_ data: Data) async throws -> PreparedSpatialImage {
-        guard data.count <= 30_000_000 else { throw AppError.message("This image could not be loaded (maximum 30 MB).") }
+        guard data.count <= 30_000_000 else {
+            throw AppError.message("This image could not be loaded (maximum 30 MB).")
+        }
         let decoded = Task.detached(priority: .userInitiated) { () throws -> (cg: CGImage, png: Data) in
             guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 2048,
-                    kCGImageSourceCreateThumbnailWithTransform: true
-                  ] as CFDictionary) else { throw AppError.message("This image could not be loaded (maximum 30 MB).") }
+                let cg = CGImageSourceCreateThumbnailAtIndex(
+                    source, 0,
+                    [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceThumbnailMaxPixelSize: 2048,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                    ] as CFDictionary)
+            else { throw AppError.message("This image could not be read. Use a PNG or JPEG file.") }
             try Task.checkCancellation()
-            guard let png = UIImage(cgImage: cg).pngData() else { throw AppError.message("This image could not be processed.") }
+            guard let png = UIImage(cgImage: cg).pngData() else {
+                throw AppError.message("This image could not be processed.")
+            }
             return (cg, png)
         }
-        let (cg, png) = try await withTaskCancellationHandler { try await decoded.value } onCancel: { decoded.cancel() }
+        let (cg, png) = try await withTaskCancellationHandler {
+            try await decoded.value
+        } onCancel: {
+            decoded.cancel()
+        }
         try Task.checkCancellation()
         let texture: TextureResource
-        if #available(iOS 18, *) { texture = try await TextureResource(image: cg, options: .init(semantic: .color)) }
-        else { texture = try TextureResource.generate(from: cg, withName: nil, options: .init(semantic: .color)) }
+        if #available(iOS 18, *) {
+            texture = try await TextureResource(image: cg, options: .init(semantic: .color))
+        } else {
+            texture = try TextureResource.generate(from: cg, withName: nil, options: .init(semantic: .color))
+        }
         return PreparedSpatialImage(data: png, image: UIImage(cgImage: cg), texture: texture)
     }
 }

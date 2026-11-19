@@ -8,13 +8,17 @@ public struct SurfacePatch: Codable, Equatable, Identifiable, Sendable {
     public var vertices: [Point3]
     public var vertical: Bool
     public init(id: UUID, pose: Pose, vertices: [Point3], vertical: Bool) {
-        self.id = id; self.pose = pose; self.vertices = vertices; self.vertical = vertical
+        self.id = id
+        self.pose = pose
+        self.vertices = vertices
+        self.vertical = vertical
     }
     public func validate() throws {
         guard vertices.count >= 3, vertices.count <= 2048,
-              vertices.allSatisfy({ [$0.x,$0.y,$0.z].allSatisfy(\.isFinite) }) else { throw SpatialError.invalidGeometry }
+            vertices.allSatisfy({ [$0.x, $0.y, $0.z].allSatisfy(\.isFinite) })
+        else { throw SpatialError.invalidGeometry }
     }
-    public var worldVertices: [SIMD3<Float>] { vertices.map { (pose.matrix * SIMD4($0.vector,1)).xyz } }
+    public var worldVertices: [SIMD3<Float>] { vertices.map { (pose.matrix * SIMD4($0.vector, 1)).xyz } }
 }
 
 /// Observable ARKit evidence, deliberately not a percentage of the physical room scanned.
@@ -27,14 +31,19 @@ public struct ScanProgress: Equatable, Sendable {
     public var featureCount = 0
     public var surfaces: [SurfacePatch] = []
     public var coverage = ScanCoverage()
-    public var cameraYaw:Float=0
-    public var observedSurfaceCount=0
-    public var renderingReduced=false
+    public var cameraYaw: Float = 0
+    public var observedSurfaceCount = 0
+    public var renderingReduced = false
     public init() {}
     public var verticalCount: Int { surfaces.filter(\.vertical).count }
     public var horizontalCount: Int { surfaces.count - verticalCount }
     public var hasUsefulFeatures: Bool { featureCount >= Self.minimumFeatureCount }
-    public var canFinish: Bool { normalTracking && mapReady && hasUsefulFeatures && stableSeconds >= 2 && !surfaces.isEmpty && coverage.ready }
+    /// Readiness gates: all must hold, so a room is never finished on a single signal.
+    /// The 2 s stability window keeps a briefly good frame from ending the scan.
+    public var canFinish: Bool {
+        normalTracking && mapReady && hasUsefulFeatures && stableSeconds >= 2 && !surfaces.isEmpty && coverage.ready
+    }
+    /// Coarse progress step for the UI (0 to 3); each step needs the previous one's evidence.
     public var stage: Int {
         guard normalTracking else { return 0 }
         if canFinish { return 3 }
@@ -54,10 +63,13 @@ public struct ScanCoverage: Equatable, Sendable {
     private var pendingStart: TimeInterval?
     private var pendingElapsed: TimeInterval = 0
     private var pendingRecorded = false
+    /// How long the camera must hold still facing one direction before that view counts.
     private static let dwell: TimeInterval = 0.75
 
     public init() {}
+    /// Four headings and three well-separated positions are the minimum for a multi-view scan.
     public var ready: Bool { headings.count >= 4 && positions.count >= 3 }
+    /// Per-direction progress (0 to 1) for the four 90-degree headings, used to fill the four direction bars.
     public var directionProgress: [Double] {
         (0..<4).map { heading in
             if headings.contains(heading) { return 1 }
@@ -67,10 +79,12 @@ public struct ScanCoverage: Equatable, Sendable {
     }
 
     /// Only a continuous reliable pause qualifies a view. Tracking loss preserves completed views.
+    /// A forward vector under 0.3 m horizontal length (camera pointing near up or down) has no usable heading.
     public mutating func observe(position: SIMD3<Float>, forward: SIMD3<Float>, reliable: Bool, at time: TimeInterval) {
         guard time.isFinite, reliable,
-              [position.x,position.y,position.z,forward.x,forward.y,forward.z].allSatisfy(\.isFinite),
-              hypot(Double(forward.x), Double(forward.z)) > 0.3 else {
+            [position.x, position.y, position.z, forward.x, forward.y, forward.z].allSatisfy(\.isFinite),
+            hypot(Double(forward.x), Double(forward.z)) > 0.3
+        else {
             resetPending()
             currentHeading = nil
             previousTime = time.isFinite ? time : nil
@@ -81,9 +95,10 @@ public struct ScanCoverage: Equatable, Sendable {
         currentHeading = heading
         let continuous = previousTime.map { time >= $0 && time - $0 <= 1 } ?? false
         previousTime = time
-        let stationary = pendingPosition.map {
-            hypot(Double(position.x) - Double($0.x), Double(position.z) - Double($0.z)) <= 0.35
-        } ?? false
+        let stationary =
+            pendingPosition.map {
+                hypot(Double(position.x) - Double($0.x), Double(position.z) - Double($0.z)) <= 0.35
+            } ?? false
         guard continuous, pendingHeading == heading, stationary, let start = pendingStart else {
             // A finite out-of-order sample starts a fresh candidate at its own timestamp.
             pendingHeading = heading
@@ -96,10 +111,12 @@ public struct ScanCoverage: Equatable, Sendable {
         pendingElapsed = min(Self.dwell, max(0, time - start))
         guard pendingElapsed >= Self.dwell, !pendingRecorded else { return }
         headings.insert(heading)
-        let horizontal = SIMD2(position.x,position.z)
-        if positions.count < 32 && positions.allSatisfy({
-            hypot(Double($0.x) - Double(horizontal.x), Double($0.z) - Double(horizontal.y)) >= 0.5
-        }) {
+        let horizontal = SIMD2(position.x, position.z)
+        if positions.count < 32
+            && positions.allSatisfy({
+                hypot(Double($0.x) - Double(horizontal.x), Double($0.z) - Double(horizontal.y)) >= 0.5
+            })
+        {
             positions.append(Point3(position))
             pendingRecorded = true
         }
@@ -121,7 +138,9 @@ public struct ScanCoverage: Equatable, Sendable {
     }
 
     public var instruction: String {
-        if positions.count < 3 { return "Walk to three positions at least 0.5 m apart. Pause at each to capture textured details." }
+        if positions.count < 3 {
+            return "Walk to three positions at least 0.5 m apart. Pause at each to capture textured details."
+        }
         if headings.count < 4 { return "Turn toward each remaining direction and pause to capture a steady view." }
         return "Look back at captured details as you return, so the room map connects."
     }

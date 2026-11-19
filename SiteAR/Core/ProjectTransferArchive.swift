@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 
 public struct ProjectTransferManifest: Codable, Sendable {
     public var version: Int = 1
@@ -7,9 +7,14 @@ public struct ProjectTransferManifest: Codable, Sendable {
     public var rooms: [Room]
     public var annotations: [Annotation]
     public var assets: [ProjectTransferAsset]
-    public init(version: Int = 1, project: Project, rooms: [Room], annotations: [Annotation], assets: [ProjectTransferAsset]) {
-        self.version = version; self.project = project; self.rooms = rooms
-        self.annotations = annotations; self.assets = assets
+    public init(
+        version: Int = 1, project: Project, rooms: [Room], annotations: [Annotation], assets: [ProjectTransferAsset]
+    ) {
+        self.version = version
+        self.project = project
+        self.rooms = rooms
+        self.annotations = annotations
+        self.assets = assets
     }
 }
 
@@ -18,14 +23,19 @@ public struct ProjectTransferAsset: Codable, Sendable {
     public var byteCount: UInt64
     public var sha256: String
     public init(path: String, byteCount: UInt64, sha256: String) {
-        self.path = path; self.byteCount = byteCount; self.sha256 = sha256
+        self.path = path
+        self.byteCount = byteCount
+        self.sha256 = sha256
     }
 }
 
-/// A bounded manifest followed by streamed, checksum-protected asset bytes.
+/// File format: the 8-byte magic `SiteAR01`, a little-endian UInt64 manifest length, the JSON manifest,
+/// then each asset's raw bytes in manifest order. Every asset's SHA-256 is in the manifest and is
+/// verified on import, so a damaged or tampered archive is rejected instead of partially imported.
 public enum ProjectTransferArchive {
     public enum Failure: Error, LocalizedError {
-        case invalidArchive, unsupportedVersion, invalidProject, invalidPath, missingAsset, unsafeFile, limitExceeded, checksumMismatch, destinationExists
+        case invalidArchive, unsupportedVersion, invalidProject, invalidPath, missingAsset, unsafeFile, limitExceeded,
+            checksumMismatch, destinationExists
         public var errorDescription: String? {
             switch self {
             case .invalidArchive: return "The project file is damaged or incomplete."
@@ -40,14 +50,21 @@ public enum ProjectTransferArchive {
             }
         }
     }
-    private static let magic = Data("sitescope01".utf8)
+    /// Exactly 8 bytes; `read` rejects any file whose first 8 bytes differ, so the format version is checked first.
+    private static let magic = Data("SiteAR01".utf8)
+    /// Large files are streamed in 1 MiB pieces so memory use stays bounded.
     private static let chunkSize = 1_048_576
+    /// Size caps protect against oversized or hostile archives before anything is allocated or written.
     private static let manifestLimit: UInt64 = 16 * 1_048_576
     private static let assetLimit: UInt64 = 256 * 1_048_576
     private static let totalLimit: UInt64 = 1024 * 1_048_576
     private static var fm: FileManager { .default }
 
-    public static func write(project: Project, rooms: [Room], annotations: [Annotation], assetRoot: URL, to destination: URL) throws {
+    /// Writes into a hidden temporary file and moves it into place, so a failed export never leaves
+    /// a partial archive at `destination`.
+    public static func write(
+        project: Project, rooms: [Room], annotations: [Annotation], assetRoot: URL, to destination: URL
+    ) throws {
         var manifest = ProjectTransferManifest(project: project, rooms: rooms, annotations: annotations, assets: [])
         let paths = try references(manifest).sorted()
         let rootAttributes = try fm.attributesOfItem(atPath: assetRoot.path)
@@ -66,11 +83,13 @@ public enum ProjectTransferArchive {
             manifest.assets.append(ProjectTransferAsset(path: path, byteCount: size, sha256: hash))
         }
         try validate(manifest)
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(manifest)
         guard UInt64(data.count) <= manifestLimit else { throw Failure.limitExceeded }
         try requireAbsent(destination)
-        let temporary = destination.deletingLastPathComponent().appendingPathComponent(".sitescope-export-\(UUID().uuidString)")
+        let temporary = destination.deletingLastPathComponent().appendingPathComponent(
+            ".sitescope-export-\(UUID().uuidString)")
         guard fm.createFile(atPath: temporary.path, contents: nil) else { throw Failure.unsafeFile }
         defer { try? fm.removeItem(at: temporary) }
         let output = try FileHandle(forWritingTo: temporary)
@@ -84,8 +103,12 @@ public enum ProjectTransferArchive {
                 guard try fileSize(url) == asset.byteCount else { throw Failure.invalidArchive }
                 let input = try FileHandle(forReadingFrom: url)
                 defer { try? input.close() }
+                // Re-checks size and trailing bytes: an asset edited after the manifest was built
+                // must fail here instead of silently producing a corrupt archive.
                 let hash = try stream(input, byteCount: asset.byteCount, output: output)
-                guard hash == asset.sha256, try input.read(upToCount: 1)?.isEmpty ?? true else { throw Failure.checksumMismatch }
+                guard hash == asset.sha256, try input.read(upToCount: 1)?.isEmpty ?? true else {
+                    throw Failure.checksumMismatch
+                }
             }
             try output.synchronize()
             try output.close()
@@ -97,6 +120,8 @@ public enum ProjectTransferArchive {
         }
     }
 
+    /// Stages assets in a hidden directory and moves it into place only after every checksum matches,
+    /// so a corrupt import leaves no half-extracted project behind.
     public static func read(from source: URL, extractTo destination: URL) throws -> ProjectTransferManifest {
         try requireAbsent(destination)
         _ = try fileSize(source)
@@ -108,7 +133,8 @@ public enum ProjectTransferArchive {
         guard length > 0, length <= manifestLimit else { throw Failure.limitExceeded }
         let manifest = try JSONDecoder().decode(ProjectTransferManifest.self, from: exact(input, count: Int(length)))
         try validate(manifest)
-        let staging = destination.deletingLastPathComponent().appendingPathComponent(".sitescope-import-\(UUID().uuidString)", isDirectory: true)
+        let staging = destination.deletingLastPathComponent().appendingPathComponent(
+            ".sitescope-import-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: staging, withIntermediateDirectories: false)
         defer { try? fm.removeItem(at: staging) }
         for asset in manifest.assets {
@@ -122,7 +148,10 @@ public enum ProjectTransferArchive {
                 let hash = try stream(input, byteCount: asset.byteCount, output: output)
                 try output.close()
                 guard hash == asset.sha256 else { throw Failure.checksumMismatch }
-            } catch { try? output.close(); throw error }
+            } catch {
+                try? output.close()
+                throw error
+            }
         }
         guard try input.read(upToCount: 1)?.isEmpty ?? true else { throw Failure.invalidArchive }
         try requireAbsent(destination)
@@ -130,6 +159,7 @@ public enum ProjectTransferArchive {
         return manifest
     }
 
+    /// Collects every asset path the manifest refers to, validating rooms and annotations on the way.
     private static func references(_ manifest: ProjectTransferManifest) throws -> Set<String> {
         guard manifest.version == 1 else { throw Failure.unsupportedVersion }
         guard manifest.rooms.count <= 256, manifest.annotations.count <= 2000 else { throw Failure.limitExceeded }
@@ -141,11 +171,16 @@ public enum ProjectTransferArchive {
             try room.validate()
             rooms[room.id] = room
             points += room.reference_points.count + (room.surfaces ?? []).reduce(0) { $0 + $1.vertices.count }
-            if let path = room.map_path { try validatePath(path, project: manifest.project.id, room: room.id); paths.insert(path) }
+            if let path = room.map_path {
+                try validatePath(path, project: manifest.project.id, room: room.id)
+                paths.insert(path)
+            }
         }
         var ids = Set<UUID>()
         for annotation in manifest.annotations {
-            guard ids.insert(annotation.id).inserted, let room = rooms[annotation.room_id] else { throw Failure.invalidProject }
+            guard ids.insert(annotation.id).inserted, let room = rooms[annotation.room_id] else {
+                throw Failure.invalidProject
+            }
             try annotation.validate(room: room)
             points += annotation.points.count + (annotation.strokes ?? []).reduce(0) { $0 + $1.count }
             if let image = annotation.image {
@@ -158,26 +193,39 @@ public enum ProjectTransferArchive {
         return paths
     }
 
+    /// Recomputes the expected asset list so a manifest can neither add nor omit files.
     private static func validate(_ manifest: ProjectTransferManifest) throws {
         let expected = try references(manifest)
         guard manifest.assets.count == expected.count,
-              manifest.assets.map(\.path) == expected.sorted() else { throw Failure.invalidProject }
+            manifest.assets.map(\.path) == expected.sorted()
+        else { throw Failure.invalidProject }
         var total: UInt64 = 0
         for asset in manifest.assets {
-            guard asset.byteCount <= assetLimit, asset.byteCount <= totalLimit - total else { throw Failure.limitExceeded }
-            guard asset.sha256.utf8.count == 64, asset.sha256.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { throw Failure.invalidArchive }
+            guard asset.byteCount <= assetLimit, asset.byteCount <= totalLimit - total else {
+                throw Failure.limitExceeded
+            }
+            guard asset.sha256.utf8.count == 64,
+                asset.sha256.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
+            else { throw Failure.invalidArchive }
             total += asset.byteCount
         }
     }
 
+    /// Asset paths become file-system paths on import, so only `<project>/<room>/<name>` with ASCII
+    /// characters and no `.`/`..` components is accepted.
     private static func validatePath(_ path: String, project: UUID, room: UUID) throws {
         let parts = path.split(separator: "/", omittingEmptySubsequences: false)
         guard parts.count >= 3,
-              parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }),
-              UUID(uuidString: String(parts[0])) == project, UUID(uuidString: String(parts[1])) == room,
-              path.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || [45, 46, 47, 95].contains($0) }) else { throw Failure.invalidPath }
+            parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }),
+            UUID(uuidString: String(parts[0])) == project, UUID(uuidString: String(parts[1])) == room,
+            path.utf8.allSatisfy({
+                (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0)
+                    || [45, 46, 47, 95].contains($0)
+            })
+        else { throw Failure.invalidPath }
     }
 
+    /// Rejects a symbolic link at any path component, so an export cannot read files outside the asset root.
     private static func assetURL(_ path: String, root: URL) throws -> URL {
         var url = root
         for component in path.split(separator: "/") {
@@ -191,7 +239,8 @@ public enum ProjectTransferArchive {
     private static func fileSize(_ url: URL) throws -> UInt64 {
         let attributes = try fm.attributesOfItem(atPath: url.path)
         guard attributes[.type] as? FileAttributeType == .typeRegular,
-              let size = attributes[.size] as? NSNumber else { throw Failure.unsafeFile }
+            let size = attributes[.size] as? NSNumber
+        else { throw Failure.unsafeFile }
         return size.uint64Value
     }
 
@@ -202,12 +251,16 @@ public enum ProjectTransferArchive {
     private static func exact(_ input: FileHandle, count: Int) throws -> Data {
         var data = Data()
         while data.count < count {
-            guard let chunk = try input.read(upToCount: min(chunkSize, count - data.count)), !chunk.isEmpty else { throw Failure.invalidArchive }
+            guard let chunk = try input.read(upToCount: min(chunkSize, count - data.count)), !chunk.isEmpty else {
+                throw Failure.invalidArchive
+            }
             data.append(chunk)
         }
         return data
     }
 
+    /// Hashes the bytes in bounded chunks while optionally copying them to `output`, so one pass
+    /// both verifies and writes an asset.
     private static func stream(_ input: FileHandle, byteCount: UInt64, output: FileHandle? = nil) throws -> String {
         var hash = SHA256()
         var remaining = byteCount

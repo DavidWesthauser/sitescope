@@ -14,8 +14,11 @@ struct ScanOverview: View {
                     .blur(radius: 7)
                     .offset(y: 2)
                     .accessibilityHidden(true)
-                ScanMiniature(surfaces:progress.surfaces,yaw:progress.cameraYaw,reducedDetail:progress.renderingReduced)
-                    .frame(width:typeSize.isAccessibilitySize ? 160 : 210,height:typeSize.isAccessibilitySize ? 140 : 190)
+                ScanMiniature(
+                    surfaces: progress.surfaces, yaw: progress.cameraYaw, reducedDetail: progress.renderingReduced
+                )
+                .frame(
+                    width: typeSize.isAccessibilitySize ? 160 : 210, height: typeSize.isAccessibilitySize ? 140 : 190)
             }
             HStack(spacing: 6) {
                 Circle()

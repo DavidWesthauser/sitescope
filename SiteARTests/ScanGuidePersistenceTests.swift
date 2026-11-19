@@ -1,15 +1,16 @@
-import XCTest
 import Foundation
-#if canImport(sitescopeCore)
-@testable import sitescopeCore
+import XCTest
+
+#if canImport(SiteARCore)
+    @testable import SiteARCore
 #else
-@testable import sitescope
+    @testable import SiteAR
 #endif
 
 final class ScanGuidePersistenceTests: XCTestCase {
     // JPEG framing stubs exercise metadata validation only; these are not decoded scene photos.
-    private let guide = Data([0xff,0xd8,0x11,0xff,0xd9]).base64EncodedString()
-    private let otherGuide = Data([0xff,0xd8,0x22,0xff,0xd9]).base64EncodedString()
+    private let guide = Data([0xff, 0xd8, 0x11, 0xff, 0xd9]).base64EncodedString()
+    private let otherGuide = Data([0xff, 0xd8, 0x22, 0xff, 0xd9]).base64EncodedString()
 
     func testLegacyRoomDecodesWithoutGuideAndGuideRoundTripsWithCoordinates() throws {
         var room = Room(project_id: UUID(), name: "Legacy room")
@@ -31,10 +32,12 @@ final class ScanGuidePersistenceTests: XCTestCase {
 
     func testGuideRejectsMalformedNoncanonicalBase64AndNonJPEGFraming() throws {
         var room = Room(project_id: UUID(), name: "Validation")
-        let invalid = ["", "not base64!", guide + "\n", "/9j/2R==",
-                       Data([0xff,0xd8,0xff]).base64EncodedString(),
-                       Data([0x00,0xd8,0xff,0xd9]).base64EncodedString(),
-                       Data([0xff,0xd8,0xff,0x00]).base64EncodedString()]
+        let invalid = [
+            "", "not base64!", guide + "\n", "/9j/2R==",
+            Data([0xff, 0xd8, 0xff]).base64EncodedString(),
+            Data([0x00, 0xd8, 0xff, 0xd9]).base64EncodedString(),
+            Data([0xff, 0xd8, 0xff, 0x00]).base64EncodedString(),
+        ]
         for candidate in invalid {
             room.scan_guide_jpeg = candidate
             XCTAssertThrowsError(try room.validate(), "Accepted invalid guide: \(candidate)")
@@ -45,9 +48,9 @@ final class ScanGuidePersistenceTests: XCTestCase {
 
     func testGuideDecodedByteLimitIncludesExactBoundary() throws {
         var room = Room(project_id: UUID(), name: "Bounds")
-        var maximum = Data([0xff,0xd8])
+        var maximum = Data([0xff, 0xd8])
         maximum.append(Data(repeating: 0, count: 65_532))
-        maximum.append(contentsOf: [0xff,0xd9])
+        maximum.append(contentsOf: [0xff, 0xd9])
         XCTAssertEqual(maximum.count, 65_536)
         room.scan_guide_jpeg = maximum.base64EncodedString()
         XCTAssertEqual(room.scan_guide_jpeg?.utf8.count, 87_384)
@@ -64,7 +67,7 @@ final class ScanGuidePersistenceTests: XCTestCase {
     func testMapRetryPreservesGuideAndResetRejectsLateCapture() throws {
         var transaction = MapSaveTransaction()
         let generation = transaction.generation
-        let map = Data([1,2,3])
+        let map = Data([1, 2, 3])
         var room = Room(project_id: UUID(), name: "Saved room")
         room.map_path = "project/room/map.worldmap"
         room.scan_guide_jpeg = guide
@@ -100,19 +103,21 @@ final class ScanGuidePersistenceTests: XCTestCase {
         room.scan_guide_jpeg = guide
         room.map_path = "\(project.id.uuidString)/\(room.id.uuidString)/map.worldmap"
         let mapURL = root.appendingPathComponent(room.map_path!)
-        try FileManager.default.createDirectory(at: mapURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: mapURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let bytes = Data("Synthetic map fixture for transfer testing only".utf8)
         try bytes.write(to: mapURL)
         let task = Annotation(room: room, kind: .text, pose: .identity, title: "Saved pose", detail: "")
         let archive = root.appendingPathComponent("guide.sitescope")
-        try ProjectTransferArchive.write(project: project, rooms: [room], annotations: [task], assetRoot: root, to: archive)
+        try ProjectTransferArchive.write(
+            project: project, rooms: [room], annotations: [task], assetRoot: root, to: archive)
         let extracted = root.appendingPathComponent("extracted")
         let manifest = try ProjectTransferArchive.read(from: archive, extractTo: extracted)
         XCTAssertEqual(manifest.rooms, [room])
         XCTAssertEqual(manifest.rooms.first?.scan_guide_jpeg, guide)
         XCTAssertEqual(manifest.rooms.first?.coordinate_id, room.coordinate_id)
         XCTAssertEqual(manifest.annotations, [task])
-        XCTAssertEqual(manifest.assets.count, 1) // The guide is bounded metadata, not a separate marker asset.
+        XCTAssertEqual(manifest.assets.count, 1)  // The guide is bounded metadata, not a separate marker asset.
         XCTAssertEqual(try Data(contentsOf: extracted.appendingPathComponent(room.map_path!)), bytes)
     }
 }
