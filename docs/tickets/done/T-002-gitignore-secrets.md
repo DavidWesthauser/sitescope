@@ -1,9 +1,9 @@
 # T-002 Fix .gitignore so Secrets.xcconfig can never be committed
 
-- Status: done · Priority: P0 · Estimate: 0.5 h · Owner: — · Depends on: —
+- Status: done · Priority: P0 · Who: agent · Owner: — · Depends on: —
 - Requirements: technical rule "no secrets in Git"
 
-## Goal
+## Description
 
 Make sure `sitescope/Resources/Secrets.xcconfig` can never be committed. The old entry pointed at a path from before the rename, so the file would not have been ignored.
 

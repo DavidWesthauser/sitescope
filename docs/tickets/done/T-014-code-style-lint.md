@@ -1,9 +1,9 @@
 # T-014 Consistent code style: formatter + linter
 
-- Status: done · Priority: P1 · Estimate: 4 h · Owner: — · Depends on: T-001
+- Status: done · Priority: P1 · Who: agent · Owner: — · Depends on: T-001
 - Requirements: quality "Lesbarkeit", "Programmierstil"
 
-## Goal
+## Description
 
 Make the code easy to read for outsiders with one formatter and linter config and doc comments on non-trivial parts. Much code was packed into single lines with `;` separators (e.g. `Models.swift`, `Store.swift`, `ManagementViews.swift`).
 
