@@ -1,6 +1,6 @@
 # AI usage and handover preparation
 
-Course rule: AI tools are allowed, but every member must understand, review and be able to explain the code; the README must contain a short reflection and **one concrete example per member** (see REQUIREMENTS.md P3–P5, ticket T-019).
+Course rule: AI tools are allowed, but every member must understand, review and be able to explain the code; the README must contain a short reflection and **one concrete example per member** (see REQUIREMENTS.md P3–P5, ticket H-006).
 
 ## Tools used so far
 
@@ -22,7 +22,7 @@ Commit hashes (`88d4de7`, `ece3928`) are from the history before the 2026-11-05 
 | 2026-10-27 | Failed image reposition could reuse an old photo; slow selections overwrote newer ones | Image request tokens, explicit draft clearing |
 | 2026-10-31 | `ViewThatFits` for the AR tools card would reset state and oscillate; a modifier chain exceeded the type checker; a test called a non-existent helper | Rejected before commit; split into `ARSessionFeedback`; test rewritten against real API |
 
-These are factual project examples, **not** personal reflections. Each member must still write their own (T-019):
+These are factual project examples, **not** personal reflections. Each member must still write their own (H-006):
 
 - name, owned features/files, own commits
 - which AI tool, for what
@@ -36,4 +36,4 @@ These are factual project examples, **not** personal reflections. Each member mu
 4. What lives in Postgres vs. Storage, and how RLS blocks outsiders and limits roles.
 5. Local mode vs. cloud mode vs. offline sync; what each test suite actually proves.
 6. Error handling and lifecycle (background, interruption, permission denial).
-7. The layer structure (views → view models → repositories → backend/local store) after T-013.
+7. The layer structure (views → state → local storage and sync → backend) after T-008 and T-027.

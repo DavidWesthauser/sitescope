@@ -1,6 +1,6 @@
 # Architecture
 
-Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies. Backend: Supabase (Postgres + RLS, Auth, Storage) via plain `URLSession`. Target architecture changes are planned in T-013.
+Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies. Backend: Supabase (Postgres + RLS, Auth, Storage) via plain `URLSession`. Planned changes: one local-first storage path (T-008) and smaller files (T-027).
 
 ## Layout
 

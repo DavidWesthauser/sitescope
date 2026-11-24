@@ -46,4 +46,4 @@ supabase start && supabase db reset && supabase test db   # RLS policies
 
 ## AI usage
 
-See [docs/AI_USAGE.md](docs/AI_USAGE.md). Each team member's personal reflection is still to be written (ticket T-019).
+See [docs/AI_USAGE.md](docs/AI_USAGE.md). Each team member's personal reflection is still to be written (ticket H-006).

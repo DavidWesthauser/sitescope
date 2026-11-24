@@ -15,8 +15,8 @@ Before starting: install via Xcode (Developer Mode on, signing set). **Keep Xcod
 ## 2. Two phones
 
 - **File transfer (works today):** Export project on A → AirDrop/Files → Import on B. Same rooms, images, statuses. Recognize the room on B. Cancelled and corrupted imports leave no partial project.
-- **Cloud (after T-003):** manager on A, member on B. Create on A, refresh on B, recognize the room on B, complete a task, see it on A. Outsider sees nothing.
-- **Offline (after T-008):** airplane mode on B, change status, relaunch, reconnect → syncs to A.
+- **Cloud (H-003):** manager on A, member on B. Create on A, refresh on B, recognize the room on B, complete a task, see it on A. Outsider sees nothing.
+- **Offline (H-005, after T-008):** airplane mode on B, change status, relaunch, reconnect → syncs to A.
 
 ## 3. Failure and lifecycle cases
 

@@ -1,6 +1,6 @@
 # Backend setup (Supabase)
 
-Status: schema and policies exist but have **not been deployed or run yet** (T-003). New tables for houses, roles and comments will come as new timestamped migrations (`YYYYMMDDHHMM_name.sql`, run in filename order) (T-005, T-006, T-011). Keep this file in sync with `supabase/`.
+Status: schema and policies exist but have **not been deployed or run yet** (T-003, H-003). New tables for houses, roles and comments will come as new timestamped migrations (`YYYYMMDDHHMM_name.sql`, run in filename order) (T-005, T-006, T-011). Keep this file in sync with `supabase/`.
 
 ## Hosted development project (dashboard, no CLI needed)
 
