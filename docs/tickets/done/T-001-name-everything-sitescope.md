@@ -1,9 +1,9 @@
 # T-001 Name everything sitescope so the project builds
 
-- Status: done · Priority: P0 · Estimate: 3 h · Owner: — · Depends on: —
+- Status: done · Priority: P0 · Who: agent · Owner: — · Depends on: —
 - Requirements: G6, G7 (nothing could be built or tested before this)
 
-## Goal
+## Description
 
 Make the project build and test under one name, sitescope. The code was half-renamed: folders used one name, while `Package.swift`, the Xcode project, scheme and generator used the other, so nothing built.
 

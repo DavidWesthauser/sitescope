@@ -25,7 +25,7 @@ Rules every change follows. `swift format` checks the layout automatically; the 
 
 ## Structure
 
-- Layers: Views (SwiftUI, no networking or file I/O) → view models / `Store` → repositories and services (`Backend`, local storage) → pure `Core` types. Views never call `Backend` directly (T-013).
+- Layers: Views (SwiftUI, no networking or file I/O) → view models / `Store` → repositories and services (`Backend`, local storage) → pure `Core` types. Views never call `Backend` directly (T-027).
 - Pure logic lives in `sitescope/Core/` and has unit tests. No `ARKit`/`UIKit` imports there.
 - One screen or one clear responsibility per file; split files that grow past roughly 300 lines.
 - No duplicated logic: extract a shared helper instead of copying.
@@ -42,3 +42,12 @@ Rules every change follows. `swift format` checks the layout automatically; the 
 
 - New domain logic comes with unit tests; new user flows with a UI test (see T-015).
 - Test names describe behavior: `testDeletingHouseRemovesItsRooms`.
+
+## Tickets
+
+Plain text files in `docs/tickets/todo/` and `docs/tickets/done/`, listed in the [overview](tickets/README.md).
+
+- One ticket per key feature; extend a ticket before adding one. No estimates, no sub-tickets.
+- Each has a description, tasks and acceptance criteria. Copy an existing one to start a new one.
+- `Who`: `agent` = AI alone · `together` = AI builds, a human checks · `human` (`H-XXX`) = only a human. Agents never tick or close human work.
+- Finished: set `Status: done`, move the file to `done/`, move its line in the overview, update STATUS.md.
