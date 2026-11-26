@@ -45,7 +45,7 @@ struct RoomDetail: View {
                 } header: {
                     Text("Tasks")
                 } footer: {
-                    Text("Tasks are available without AR.")
+                    if manager && current.map_path == nil { Text("Map the room to add tasks.") }
                 }
             }
             ForEach(TaskStatus.allCases, id: \.self) { status in
@@ -100,13 +100,12 @@ struct RoomDetail: View {
             content: { mode in ARScreen(room: current, mode: mode, manager: manager).environmentObject(store) })
     }
 
-    /// Tasks are pinned to a spot in the room, so adding one opens the AR editor; an unmapped room must be mapped first.
+    /// Tasks are pinned to a spot in the room, so adding one opens the AR editor. Unmapped rooms explain this in the
+    /// Tasks footer instead.
     @ViewBuilder private var addTaskRow: some View {
         if manager {
             if current.map_path != nil {
                 Button("Add task", systemImage: "plus") { arMode = .editing }.accessibilityIdentifier("tasks.new")
-            } else {
-                Label("Map the room to add tasks", systemImage: "plus").foregroundStyle(.secondary)
             }
         }
     }

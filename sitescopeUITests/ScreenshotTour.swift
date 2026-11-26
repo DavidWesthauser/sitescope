@@ -233,7 +233,11 @@ final class ScreenshotTour: XCTestCase {
             app.swipeDown()
             tap(app.staticTexts["Bathroom"])
             tap(app.buttons["Map room"])
-            if app.alerts.firstMatch.waitForExistence(timeout: 5) { app.alerts.buttons.firstMatch.tap() }
+            if app.alerts.firstMatch.waitForExistence(timeout: 5) {
+                pause()
+                shot(name + "-ar-alert")
+                app.alerts.buttons.firstMatch.tap()
+            }
             if tapFirst(["Scan options and progress"]) {
                 pause()
                 shot(name + "-ar-options-sheet")

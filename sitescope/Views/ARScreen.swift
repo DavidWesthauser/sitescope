@@ -209,6 +209,9 @@ struct ARScreen: View {
                     .regularMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
         }
+        // The camera image is the background, so the whole cover is dark, including its alerts and sheets.
+        // `preferredColorScheme` reaches the presentation; `.environment(\.colorScheme)` only reaches SwiftUI views.
+        .preferredColorScheme(.dark)
         .onPreferenceChange(CameraAimPreference.self) { point in
             if let point { ar.aimPoint = ar.view.convert(point, from: nil) }
         }
@@ -453,7 +456,7 @@ struct ARScreen: View {
                     Spacer()
                 }
             }.padding(.horizontal, 20).padding(.bottom, 8)
-        }.foregroundStyle(.white).environment(\.colorScheme, .dark)
+        }.foregroundStyle(.white)
             .sheet(isPresented: $showingScanOptions) {
                 NavigationStack {
                     Form {
