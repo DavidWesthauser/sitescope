@@ -119,9 +119,8 @@ struct FrozenDrawingFrame {
         view.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(dragged(_:))))
         #if DEBUG
             view.debugOptions = ARDebugSettings.shared.debugOptions
-            debugObserver = ARDebugSettings.shared.objectWillChange.sink { [weak self] _ in
-                // `objectWillChange` fires before the new value is set; read it on the next turn.
-                DispatchQueue.main.async { self?.view.debugOptions = ARDebugSettings.shared.debugOptions }
+            debugObserver = ARDebugSettings.shared.changed.sink { [weak self] in
+                self?.view.debugOptions = ARDebugSettings.shared.debugOptions
             }
         #endif
         memoryObserver = NotificationCenter.default.addObserver(
@@ -207,6 +206,9 @@ struct FrozenDrawingFrame {
     /// Starts a session from scratch: tracking and anchors are dropped so the new origin is never mixed with the old one.
     private func reset(_ config: ARWorldTrackingConfiguration) {
         mapSave.reset()
+        #if DEBUG
+            debug.resetFrameRate()
+        #endif
         if mode == .mapping { savedMap = nil }
         cancelViewCapture()
         frozenFrame = nil
@@ -299,6 +301,9 @@ struct FrozenDrawingFrame {
     func resume() {
         guard interrupted, ready, running, !stopped else { return }
         interrupted = false
+        #if DEBUG
+            debug.resetFrameRate()
+        #endif
         view.session.run(configuration())
         normalSince = nil
         startedAt = Date()
