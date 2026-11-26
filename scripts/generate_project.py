@@ -30,13 +30,20 @@ for name, folders, product_type in [('sitescope',['sitescope'],'application'),('
     products.append(product)
     src = obj('sources:'+name,'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ('+','.join(sources)+'); runOnlyForDeploymentPostprocessing = 0;')
     framework = obj('frameworks:'+name,'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
-    resource = obj('resources:'+name,'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
+    resources = []
+    if name == 'sitescope':
+        # Asset catalog: AccentColor and the other named colors, each with light, dark and high-contrast values.
+        assets = 'sitescope/Resources/Assets.xcassets'
+        ref = obj('file:'+assets,f'isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = {q(assets)}; sourceTree = SOURCE_ROOT;')
+        refs.append(ref)
+        resources.append(obj('build:'+assets,f'isa = PBXBuildFile; fileRef = {ref};'))
+    resource = obj('resources:'+name,'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ('+','.join(resources)+'); runOnlyForDeploymentPostprocessing = 0;')
     configs=[]
     for config in ['Debug','Release']:
         settings = {'PRODUCT_NAME':'$(TARGET_NAME)','SWIFT_VERSION':'5.0','IPHONEOS_DEPLOYMENT_TARGET':'17.0','TARGETED_DEVICE_FAMILY':'1','CODE_SIGN_STYLE':'Automatic','SWIFT_EMIT_LOC_STRINGS':'YES','SWIFT_OPTIMIZATION_LEVEL':'-Onone' if config == 'Debug' else '-O','ENABLE_TESTABILITY':'YES' if config == 'Debug' else 'NO'}
         if config == 'Debug': settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) DEBUG'
         if name == 'sitescope':
-            settings.update(INFOPLIST_FILE='sitescope/Resources/Info.plist',PRODUCT_BUNDLE_IDENTIFIER=app_bundle)
+            settings.update(INFOPLIST_FILE='sitescope/Resources/Info.plist',PRODUCT_BUNDLE_IDENTIFIER=app_bundle,ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME='AccentColor')
             if team: settings['DEVELOPMENT_TEAM'] = team.group(1)
         else:
             settings.update(GENERATE_INFOPLIST_FILE='YES',PRODUCT_BUNDLE_IDENTIFIER='com.example.'+name)

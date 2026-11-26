@@ -107,8 +107,8 @@ struct ARScreen: View {
                         Button {
                             closing = true
                         } label: {
-                            Image(systemName: "xmark").font(.system(size: 20, weight: .semibold)).frame(
-                                width: 44, height: 44)
+                            Image(systemName: "xmark").font(.title3.weight(.semibold)).frame(
+                                minWidth: 44, minHeight: 44)
                         }.accessibilityLabel("Close")
                         Text(room.name).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8).frame(
                             maxWidth: .infinity)
@@ -116,8 +116,8 @@ struct ARScreen: View {
                             ar.resumeCamera()
                             taskList = true
                         } label: {
-                            Image(systemName: "list.bullet").font(.system(size: 20, weight: .semibold)).frame(
-                                width: 44, height: 44)
+                            Image(systemName: "list.bullet").font(.title3.weight(.semibold)).frame(
+                                minWidth: 44, minHeight: 44)
                         }.accessibilityLabel("Tasks")
                     }.padding(.horizontal, 8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 5) {
@@ -209,6 +209,9 @@ struct ARScreen: View {
                     .regularMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
         }
+        // The camera image is the background, so the whole cover is dark, including its alerts and sheets.
+        // `preferredColorScheme` reaches the presentation; `.environment(\.colorScheme)` only reaches SwiftUI views.
+        .preferredColorScheme(.dark)
         .onPreferenceChange(CameraAimPreference.self) { point in
             if let point { ar.aimPoint = ar.view.convert(point, from: nil) }
         }
@@ -242,7 +245,9 @@ struct ARScreen: View {
             if phase == .active { ar.resume() } else if phase == .background { ar.suspend() }
         }
         .alert(
-            "AR guidance", isPresented: Binding(get: { ar.error != nil }, set: { if !$0 { ar.error = nil } }),
+            // HIG (Alerts): the title names the situation when AR cannot run at all.
+            ar.isUnsupported ? "AR Not Available" : "AR guidance",
+            isPresented: Binding(get: { ar.error != nil }, set: { if !$0 { ar.error = nil } }),
             actions: { Button("OK") { ar.error = nil } },
             message: { Text(ar.error ?? "") }
         )
@@ -361,6 +366,7 @@ struct ARScreen: View {
             } else if ar.mapAvailable {
                 if ar.localization.state == .failed {
                     Button("Keep searching") { ar.continueSearching() }.buttonStyle(.borderedProminent)
+                        .prominentLabelContrast()
                 }
                 Button("Restart recognition") { ar.startMap() }.buttonStyle(.bordered).disabled(!ar.ready)
             } else {
@@ -442,15 +448,15 @@ struct ARScreen: View {
                     Button {
                         showingScanOptions = true
                     } label: {
-                        Image(systemName: "slider.horizontal.3").font(.system(size: 18, weight: .medium)).frame(
-                            width: 44, height: 44
+                        Image(systemName: "slider.horizontal.3").font(.body.weight(.medium)).frame(
+                            minWidth: 44, minHeight: 44
                         )
                         .background(.black.opacity(0.16), in: Circle())
                     }.buttonStyle(.plain).accessibilityLabel("Scan options and progress")
                     Spacer()
                 }
             }.padding(.horizontal, 20).padding(.bottom, 8)
-        }.foregroundStyle(.white).environment(\.colorScheme, .dark)
+        }.foregroundStyle(.white)
             .sheet(isPresented: $showingScanOptions) {
                 NavigationStack {
                     Form {
@@ -492,10 +498,12 @@ struct ARScreen: View {
                         "Restart and discard this unsaved scan?", isPresented: $restartingScan,
                         titleVisibility: .visible
                     ) {
+                        // Stays destructive: restarting discards the unsaved scan progress.
                         Button("Restart scan", role: .destructive) {
                             showingScanOptions = false
                             ar.startMapping()
                         }
+                        Button("Cancel", role: .cancel) {}
                     }
                     .navigationTitle("Scan options").navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -619,7 +627,7 @@ struct ARScreen: View {
                 Label("Save", systemImage: "checkmark").font(.headline).lineLimit(1).minimumScaleFactor(0.75).frame(
                     maxWidth: .infinity, minHeight: 36)
             }
-            .buttonStyle(.borderedProminent).accessibilityIdentifier("drawing.save").disabled(
+            .buttonStyle(.borderedProminent).prominentLabelContrast().accessibilityIdentifier("drawing.save").disabled(
                 ar.draft.isEmpty || saving || ar.imageLoading || (ar.tool == .image && ar.imageData == nil))
         }
     }

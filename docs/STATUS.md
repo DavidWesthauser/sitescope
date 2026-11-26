@@ -27,14 +27,14 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 | M4 | Accounts and their files on backend | 🟡 | Auth + Storage client (`Backend.swift`), private `room-assets` bucket in migration. Not deployed | H-003, T-008 |
 | M5 | Roles with read/write/delete rights | 🟡 | Only owner(manager) + worker (worker may only change task status). Needs distinct read/write/delete roles | T-006 |
 | M6 | Login with username + password | 🟡 | Email/password sign-in and sign-up UI and token refresh exist. Never run against live Auth | T-003 |
-| M7 | Dark mode | 🟡 | Mostly system colors so dark mode mostly works; a few hard-coded `.white`/`.black`; simulator smoke test 2026-11-19 found Projects and project detail readable in dark mode; no full audit and no in-app setting yet | T-012 |
+| M7 | Dark mode | 🟡 | System colors plus asset-catalog `AccentColor`/`Warning` (light, dark, high contrast, ≥ 4.5:1); Appearance setting System/Light/Dark in Settings (UI test: survives relaunch). Fixed white/black only in AR overlays. Simulator screenshots 2026-11-26 readable in both modes; no app icon, no full audit of AR screens | T-012 |
 | M8 | Comments (image, audio, text) on project/house/room | ❌ | Not implemented | T-011 |
 | M9 | Project → House → Room | ❌ | Only Project → Room | T-005 |
 | N1 | Language setting | ❌ | UI strings are English literals, no String Catalog | T-021 |
 | N2 | LiDAR 3D models | ❌ | Camera-only plane detection; no RoomPlan/scene reconstruction | T-021 |
 | N3 | Export 3D file / video | 🟡 | Project transfer file exists (not a 3D model or video) | T-021 |
 | N4 | 2FA | ❌ | Not implemented | T-021 |
-| G1 | Mobile-first UI, HIG, accessibility | 🟡 | Native SwiftUI lists/forms/sheets, accessibility labels, Dynamic Type layout fixtures. No VoiceOver/contrast audit | T-012 |
+| G1 | Mobile-first UI, HIG, accessibility | 🟡 | Native SwiftUI lists/forms/sheets; HIG pass on Project, Room, Task, Settings (inline names, destructive actions in own section with named confirmation, footers). Screenshot tour `scripts/screenshots.sh`. No VoiceOver audit | T-012 |
 | G2 | Cloud storage | ❌ | Backend not connected | T-003, H-003 |
 | G3 | Accounts + server-side protection | 🟡 | RLS/storage policies authored, never executed | T-003, T-006 |
 | G4 | Native device feature | 🟡 | Camera + ARKit in the core workflow; permission request and denial message. Not verified on a phone since the latest changes. PhotosPicker for images | H-001 |

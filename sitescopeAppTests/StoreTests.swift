@@ -30,6 +30,28 @@ import XCTest
         XCTAssertEqual(store.projects, [project])
         XCTAssertEqual(store.error, "Network offline fixture")
     }
+    func testActionStartedWhileBusyWaitsAndRuns() async {
+        let store = Store()
+        var order: [String] = []
+        store.run {
+            for _ in 0..<5 { await Task.yield() }  // Still running when the next action arrives.
+            order.append("rename")
+        }
+        store.run { order.append("delete") }
+        XCTAssertTrue(store.busy)
+        for _ in 0..<200 where store.busy { await Task.yield() }
+        XCTAssertFalse(store.busy)
+        XCTAssertEqual(order, ["rename", "delete"], "The second action is queued, not dropped")
+    }
+    func testQueuedActionRunsAfterAFailure() async {
+        let store = Store()
+        var saved = false
+        store.run { throw AppError.message("Save failed fixture") }
+        store.run { saved = true }
+        for _ in 0..<200 where store.busy { await Task.yield() }
+        XCTAssertTrue(saved)
+        XCTAssertEqual(store.error, "Save failed fixture")
+    }
 }
 
 extension StoreTests {

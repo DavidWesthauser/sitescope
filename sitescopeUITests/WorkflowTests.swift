@@ -88,13 +88,13 @@ final class WorkflowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Map room"].waitForExistence(timeout: 5))
         app.buttons["Map room"].tap()
         #if targetEnvironment(simulator)
-            XCTAssertTrue(app.alerts["AR guidance"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.alerts["AR Not Available"].waitForExistence(timeout: 5))
             XCTAssertTrue(
                 app.alerts.staticTexts["This device does not support AR world tracking. Use the task list instead."]
                     .exists)
             app.alerts.buttons["OK"].tap()
         #else
-            if app.alerts["AR guidance"].waitForExistence(timeout: 3) { app.alerts.buttons["OK"].tap() }
+            if app.alerts["AR Not Available"].waitForExistence(timeout: 3) { app.alerts.buttons["OK"].tap() }
         #endif
         XCTAssertTrue(app.staticTexts["Live scan"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["scan.finish"].exists)
@@ -119,9 +119,7 @@ final class WorkflowTests: XCTestCase {
         let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: back)
         XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
         back.tap()
-        app.buttons["Delete project and all rooms"].tap()
-        app.buttons["Delete project"].tap()
-        XCTAssertTrue(app.buttons["projects.new"].waitForExistence(timeout: 5))
+        deleteProject(app)
     }
     func testLocalProjectRenameSurvivesRelaunch() {
         let app = makeApp()
@@ -130,10 +128,11 @@ final class WorkflowTests: XCTestCase {
         let renamed = "Renamed-" + String(UUID().uuidString.prefix(8))
         createProject(app, title: title)
         app.staticTexts[title].tap()
-        app.buttons["Rename project"].tap()
-        replaceAlertText(app, with: renamed)
-        submitAlert(app, button: "Save")
+        replaceFieldText(app.textFields["project.name"], with: renamed)
+        // The title follows the draft while typing, so check the saved name in the list instead.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts[renamed].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts[title].exists)
         app.terminate()
         app.launch()
         XCTAssertTrue(app.buttons["projects.new"].waitForExistence(timeout: 10))
@@ -153,10 +152,10 @@ final class WorkflowTests: XCTestCase {
         submitAlert(app, button: "Add")
         XCTAssertTrue(app.staticTexts["Original room"].waitForExistence(timeout: 5))
         app.staticTexts["Original room"].tap()
-        app.buttons["Rename room"].tap()
-        replaceAlertText(app, with: "Renamed room")
-        submitAlert(app, button: "Save")
-        XCTAssertTrue(app.navigationBars["Renamed room"].waitForExistence(timeout: 5))
+        replaceFieldText(app.textFields["room.name"], with: "Renamed room")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.staticTexts["Renamed room"].waitForExistence(timeout: 5), "Saved name shows in the list")
+        XCTAssertFalse(app.staticTexts["Original room"].exists)
         app.terminate()
         app.launch()
         XCTAssertTrue(app.buttons["projects.new"].waitForExistence(timeout: 10))
@@ -165,9 +164,14 @@ final class WorkflowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Renamed room"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Original room"].exists)
         app.staticTexts["Renamed room"].tap()
-        app.buttons["Delete room"].tap()
-        app.buttons.matching(identifier: "Delete room").allElementsBoundByIndex.last!.tap()
+        // An edit that was never committed with Return must not be saved onto the deleted room.
+        let field = app.textFields["room.name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        field.typeText(" draft")
+        deleteRoom(app)
         XCTAssertTrue(app.buttons["rooms.new"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2), "No error after deleting")
         XCTAssertFalse(app.staticTexts["Renamed room"].exists)
         app.terminate()
         app.launch()
@@ -177,6 +181,34 @@ final class WorkflowTests: XCTestCase {
         XCTAssertTrue(app.buttons["rooms.new"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Renamed room"].exists)
         deleteProject(app)
+    }
+    func testAppearanceSettingAppliesAndSurvivesRelaunch() {
+        let app = makeApp()
+        app.launch()
+        chooseAppearance("Dark", in: app)
+        app.terminate()
+        app.launch()
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        let picker = app.buttons["settings.appearance"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertTrue(picker.label.contains("Dark") || (picker.value as? String) == "Dark", "\(picker.label)")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        chooseAppearance("System", in: app)  // UserDefaults outlive the test; leave the default behind.
+    }
+    private func chooseAppearance(_ option: String, in app: XCUIApplication) {
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        let picker = app.buttons["settings.appearance"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        picker.tap()
+        let choice = app.buttons[option]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
+        choice.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["projects.new"].waitForExistence(timeout: 5))
     }
     private func submitAlert(_ app: XCUIApplication, button: String) {
         let action = app.alerts.buttons[button]
@@ -195,26 +227,37 @@ final class WorkflowTests: XCTestCase {
         submitAlert(app, button: "Create")
         XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 5))
     }
-    /// Clears the alert's text field whatever it holds (prefilled text or placeholder), then types the value.
-    /// Taps near the trailing edge so the caret sits at the end; the edit menu's "Select All" is not used because
-    /// it disappears before it can be tapped.
-    private func replaceAlertText(_ app: XCUIApplication, with value: String) {
-        let field = app.alerts.textFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
-        // One batched delete per pass: each typeText call costs a UI snapshot, so per-character calls are slow.
-        for _ in 0...3 {
-            guard let current = field.value as? String, !current.isEmpty, current != field.placeholderValue else {
-                break
-            }
-            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
-        }
-        field.typeText(value)
-    }
+    /// Deletes through the confirmation dialog; the project must stay until the destructive button is confirmed.
     private func deleteProject(_ app: XCUIApplication) {
-        app.buttons["Delete project and all rooms"].tap()
-        app.buttons["Delete project"].tap()
+        let delete = app.buttons["project.delete"]
+        scrollTo(delete, in: app)
+        delete.tap()
+        let confirm = app.buttons["project.delete.confirm"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["rooms.new"].exists, "Nothing is deleted before the user confirms")
+        confirm.tap()
         XCTAssertTrue(app.buttons["projects.new"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2), "No error after deleting")
+    }
+    private func deleteRoom(_ app: XCUIApplication) {
+        let delete = app.buttons["room.delete"]
+        scrollTo(delete, in: app)
+        delete.tap()
+        let confirm = app.buttons["room.delete.confirm"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+    }
+    private func scrollTo(_ element: XCUIElement, in app: XCUIApplication) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5))
+        for _ in 0..<5 where !element.isHittable { app.swipeUp() }
+    }
+    /// Replaces an inline name field's text and commits it with Return. Taps near the trailing edge so the caret
+    /// sits after the text and the deletes remove all of it.
+    private func replaceFieldText(_ field: XCUIElement, with value: String) {
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let current = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + value + "\n")
     }
     /// Requires a configured backend and sitescope_TEST_EMAIL/PASSWORD in the test process environment.
     func testCreateProjectRoomRenameAndDelete() throws {
@@ -244,15 +287,13 @@ final class WorkflowTests: XCTestCase {
         submitAlert(app, button: "Add")
         XCTAssertTrue(app.staticTexts["Test room"].waitForExistence(timeout: 20))
         app.staticTexts["Test room"].tap()
-        app.buttons["Rename room"].tap()
-        let field = app.alerts.textFields.firstMatch
-        field.tap()
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Test room".count) + "Renamed room")
-        app.alerts.buttons["Save"].tap()
-        app.buttons["Delete room"].tap()
-        app.buttons.matching(identifier: "Delete room").allElementsBoundByIndex.last!.tap()
-        app.buttons["Delete project and all rooms"].tap()
-        app.buttons["Delete project"].tap()
+        replaceFieldText(app.textFields["room.name"], with: "Renamed room")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.swipeDown()  // Pull to refresh: the list must show the name saved on the server.
+        XCTAssertTrue(app.staticTexts["Renamed room"].waitForExistence(timeout: 20))
+        app.staticTexts["Renamed room"].tap()
+        deleteRoom(app)
+        deleteProject(app)
         XCTAssertTrue(app.buttons["projects.new"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts[String(title)].exists)
     }

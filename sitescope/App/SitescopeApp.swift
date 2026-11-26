@@ -4,7 +4,10 @@ import UIKit
 @main struct SitescopeApp: App {
     @StateObject private var store = Store()
     @State private var importedProjectName: String?
+    @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
     init() {
+        // HIG (Text fields): show a Clear button at the trailing end of single-line text fields.
+        UITextField.appearance().clearButtonMode = .whileEditing
         #if DEBUG
             /// UI tests pass this flag so transitions do not delay element queries; Release builds are unaffected.
             if ProcessInfo.processInfo.arguments.contains("-disableAnimations") {
@@ -24,7 +27,7 @@ import UIKit
                 }
             }
             .environmentObject(store)
-            .tint(.teal)
+            .appAppearance(appearance)
             .onOpenURL { url in
                 guard !store.busy else {
                     store.error = "Finish the current operation, then open the project file again."
@@ -56,6 +59,7 @@ import UIKit
             .overlay {
                 if store.busy {
                     ZStack {
+                        // Dimming scrim; black at low opacity is the system convention in both appearances.
                         Color.black.opacity(0.12).ignoresSafeArea()
                         ProgressView("Working…").padding(24).background(
                             .regularMaterial, in: RoundedRectangle(cornerRadius: 16))
