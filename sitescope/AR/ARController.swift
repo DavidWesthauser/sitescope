@@ -118,10 +118,8 @@ struct FrozenDrawingFrame {
         tapRecognizer = tap
         view.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(dragged(_:))))
         #if DEBUG
-            view.debugOptions = ARDebugSettings.shared.debugOptions
-            debugObserver = ARDebugSettings.shared.changed.sink { [weak self] in
-                self?.view.debugOptions = ARDebugSettings.shared.debugOptions
-            }
+            applyDebugSettings()
+            debugObserver = ARDebugSettings.shared.changed.sink { [weak self] in self?.applyDebugSettings() }
         #endif
         memoryObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main

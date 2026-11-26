@@ -15,12 +15,23 @@
         @Published var readout = false
         @Published var featurePoints = false { didSet { changed.send() } }
         /// Needs a LiDAR phone. Applied when the session next starts, because it changes the configuration.
-        @Published var sceneMesh = false { didSet { changed.send() } }
+        @Published var sceneMesh = false {
+            didSet {
+                // Mesh drawing depends on the mesh; clearing it here keeps a greyed-out toggle from staying on.
+                if !sceneMesh { meshDrawing = false }
+                changed.send()
+            }
+        }
+        /// Freehand strokes follow the LiDAR mesh instead of one locked plane. Only takes effect in a session that
+        /// was started with the mesh; see `ARController.drawsOnMesh`.
+        @Published var meshDrawing = false { didSet { changed.send() } }
         @Published var anchorGeometry = false { didSet { changed.send() } }
         @Published var anchorOrigins = false { didSet { changed.send() } }
         @Published var worldOrigin = false { didSet { changed.send() } }
         @Published var statistics = false { didSet { changed.send() } }
-        var meshSupported: Bool { ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) }
+        /// Fixed for the device, so it is asked once instead of on every touch sample.
+        let meshSupported = ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+        var drawsOnMesh: Bool { meshDrawing && sceneMesh && meshSupported }
         private init() {}
         var debugOptions: ARView.DebugOptions {
             var options: ARView.DebugOptions = []
@@ -132,6 +143,11 @@
                                 ? "The mesh starts with the next AR session: close and reopen AR. Restarting a scan would discard it."
                                 : "This phone has no LiDAR scanner."
                         ).font(.footnote).foregroundStyle(.secondary)
+                        Toggle("Draw on mesh", isOn: $settings.meshDrawing).disabled(!settings.sceneMesh)
+                        Text(
+                            "Freehand lines follow the LiDAR mesh instead of a flat plane. Needs an AR session started with the mesh; the locked view and other tools are unchanged."
+                        )
+                        .font(.footnote).foregroundStyle(.secondary)
                         Toggle("Plane geometry", isOn: $settings.anchorGeometry)
                         Toggle("Anchor origins", isOn: $settings.anchorOrigins)
                         Toggle("World origin", isOn: $settings.worldOrigin)

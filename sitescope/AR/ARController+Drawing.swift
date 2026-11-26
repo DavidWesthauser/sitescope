@@ -99,6 +99,12 @@ extension ARController {
     func beginStroke() { if !lockingView && tool == .line && !lineDraft.isDrawing { lineDraft.begin() } }
     func endStroke() {
         if tool == .line {
+            #if DEBUG
+                // Drags never report single misses; say once per stroke why a mesh stroke left nothing behind.
+                if lineDraft.isDrawing, (lineDraft.strokes.last?.count ?? 0) < 2, frozenFrame == nil, drawsOnMesh {
+                    error = "No mesh here yet. Move slowly so the LiDAR mesh can fill in, then draw again."
+                }
+            #endif
             lineDraft.end()
             draft = lineDraft.points
             renderDraft()
@@ -112,22 +118,35 @@ extension ARController {
         guard mode == .editing, !lockingView, trackingNormal || frozenFrame != nil,
             let alignment = frozenFrame?.sessionFromRoom ?? localization.roomToSession
         else { return }
-        if drawingPlane == nil {
-            guard let hit = hit(point), let frame = view.session.currentFrame else {
-                if reportMiss { error = "No surface here yet. Scan another angle, or use measured-distance placement." }
-                return
-            }
-            lockPlane(point: hit.columns.3.xyz, normal: hit.columns.1.xyz, camera: frame.camera)
-        }
-        guard let drawingPlane, let camera = view.session.currentFrame?.camera else { return }
+        guard let camera = view.session.currentFrame?.camera else { return }
         let viewport = frozenFrame?.viewport ?? view.bounds.size
         guard viewport.width > 0, viewport.height > 0 else { return }
         let vp =
             frozenFrame?.viewProjection ?? camera.projectionMatrix(
                 for: .portrait, viewportSize: viewport, zNear: 0.01, zFar: 100) * camera.viewMatrix(for: .portrait)
-        let normalized = SIMD2<Float>(Float(point.x / viewport.width), Float(point.y / viewport.height))
-        guard let ray = DrawingGeometry.ray(screen: normalized, inverseViewProjection: simd_inverse(vp)),
-            let sessionPlane = try? Pose(alignment.matrix * drawingPlane.matrix),
+        let inverse = simd_inverse(vp)
+        let rayAt = { (p: CGPoint) in
+            DrawingGeometry.ray(
+                screen: SIMD2(Float(p.x / viewport.width), Float(p.y / viewport.height)), inverseViewProjection: inverse
+            )
+        }
+        guard let ray = rayAt(point) else { return }
+        #if DEBUG
+            // A locked view keeps today's plane: the live mesh can change after the snapshot was taken.
+            if tool == .line, frozenFrame == nil, drawsOnMesh {
+                captureMeshPoint(point, rayAt: rayAt, camera: camera, alignment: alignment)
+                return
+            }
+        #endif
+        if drawingPlane == nil {
+            guard let hit = hit(point) else {
+                if reportMiss { error = "No surface here yet. Scan another angle, or use measured-distance placement." }
+                return
+            }
+            lockPlane(point: hit.columns.3.xyz, normal: hit.columns.1.xyz, camera: camera)
+        }
+        guard let drawingPlane else { return }
+        guard let sessionPlane = try? Pose(alignment.matrix * drawingPlane.matrix),
             let position = DrawingGeometry.intersection(ray, plane: sessionPlane)
         else { return }
         appendPoint(Point3((simd_inverse(alignment.matrix) * SIMD4(position, 1)).xyz))
@@ -372,3 +391,47 @@ extension ARController {
         imageWidth = image.width
     }
 }
+
+#if DEBUG
+    /// Developer-only mesh drawing (T-021 trial). Freehand points land on the LiDAR scene mesh; the locked plane
+    /// still supplies the annotation's pose and tube orientation, so the saved format is unchanged.
+    extension ARController {
+        /// Mirrors the developer toggles onto the view. The mesh only gets collision shapes, which the mesh
+        /// raycast needs, while mesh drawing is switched on.
+        func applyDebugSettings() {
+            let settings = ARDebugSettings.shared
+            view.debugOptions = settings.debugOptions
+            view.environment.sceneUnderstanding.options = settings.drawsOnMesh ? [.collision] : []
+        }
+        /// The toggle alone is not enough: the mesh only exists once a session was started with it.
+        var drawsOnMesh: Bool {
+            ARDebugSettings.shared.drawsOnMesh
+                && (view.session.configuration as? ARWorldTrackingConfiguration)?.sceneReconstruction.contains(.mesh)
+                    == true
+        }
+        private func meshSurface(_ ray: SpatialRay) -> (point: SIMD3<Float>, normal: SIMD3<Float>)? {
+            guard
+                let hit = view.scene.raycast(
+                    origin: ray.origin, direction: ray.direction, length: 5, query: .nearest, mask: .sceneUnderstanding
+                ).first
+            else { return nil }
+            return DrawingGeometry.surfacePoint(hit: hit.position, normal: hit.normal, viewer: ray.origin)
+        }
+        /// Points over a mesh hole are skipped instead of falling back to the plane, which would make the stroke
+        /// jump. The first point fixes the plane only where the mesh normal agrees with four neighbours 8 pt away.
+        func captureMeshPoint(
+            _ point: CGPoint, rayAt: (CGPoint) -> SpatialRay?, camera: ARCamera, alignment: Pose
+        ) {
+            guard let surface = rayAt(point).flatMap(meshSurface) else { return }
+            if drawingPlane == nil {
+                let neighbours = [CGPoint(x: -8, y: 0), CGPoint(x: 8, y: 0), CGPoint(x: 0, y: -8), CGPoint(x: 0, y: 8)]
+                    .compactMap { rayAt(CGPoint(x: point.x + $0.x, y: point.y + $0.y)).flatMap(meshSurface)?.normal }
+                guard let normal = DrawingGeometry.consistentNormal([surface.normal] + neighbours, minimumCount: 4)
+                else { return }
+                lockPlane(point: surface.point, normal: normal, camera: camera)
+                guard drawingPlane != nil else { return }
+            }
+            appendPoint(Point3((simd_inverse(alignment.matrix) * SIMD4(surface.point, 1)).xyz))
+        }
+    }
+#endif

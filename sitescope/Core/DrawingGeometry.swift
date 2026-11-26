@@ -35,6 +35,32 @@ public enum DrawingGeometry {
         let y = simd_normalize(simd_cross(z, x))
         return try Pose(simd_float4x4(columns: (SIMD4(x, 0), SIMD4(y, 0), SIMD4(z, 0), SIMD4(point, 1))))
     }
+    /// A drawing point on a reconstructed surface: the normal is turned toward the viewer and the point is lifted
+    /// along it, so a stroke sits on top of a noisy mesh instead of inside it. Nil outside the 0.15–5 m placement
+    /// range or for degenerate input.
+    public static func surfacePoint(
+        hit: SIMD3<Float>, normal: SIMD3<Float>, viewer: SIMD3<Float>, lift: Float = 0.003
+    ) -> (point: SIMD3<Float>, normal: SIMD3<Float>)? {
+        guard [hit, normal, viewer].allSatisfy({ [$0.x, $0.y, $0.z].allSatisfy(\.isFinite) }),
+            simd_length(normal) > 0.001, (0.15...5).contains(simd_distance(hit, viewer))
+        else { return nil }
+        var facing = simd_normalize(normal)
+        if simd_dot(facing, viewer - hit) < 0 { facing = -facing }
+        return (hit + facing * lift, facing)
+    }
+    /// Mean of surface normals sampled around one touch, or nil when there are too few or one deviates by more
+    /// than `maximumAngle` from the mean. A single mesh triangle is too noisy to fix a drawing plane on.
+    public static func consistentNormal(
+        _ normals: [SIMD3<Float>], minimumCount: Int = 4, maximumAngle: Float = .pi / 9
+    ) -> SIMD3<Float>? {
+        let units = normals.filter { simd_length($0) > 0.001 }.map(simd_normalize)
+        guard units.count >= max(1, minimumCount) else { return nil }
+        let sum = units.reduce(SIMD3<Float>.zero, +)
+        guard simd_length(sum) > 0.001 else { return nil }
+        let mean = simd_normalize(sum)
+        let limit = cos(maximumAngle)
+        return units.allSatisfy({ simd_dot($0, mean) >= limit }) ? mean : nil
+    }
     /// A measured distance follows the selected screen ray, including off-centre crosshairs.
     public static func measuredPoint(camera: SIMD3<Float>, direction: SIMD3<Float>, distance: Float) -> SIMD3<Float>? {
         guard distance.isFinite, (0.1...10).contains(distance),
