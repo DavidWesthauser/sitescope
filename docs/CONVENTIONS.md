@@ -45,9 +45,9 @@ Rules every change follows. `swift format` checks the layout automatically; the 
 
 ## Tickets
 
-Plain text files in `docs/tickets/todo/` and `docs/tickets/done/`, listed in the [overview](tickets/README.md).
+Plain text files in `docs/tickets/todo/` and `docs/tickets/done/`. The folder and the `Status:` line must agree; the work order is in STATUS.md.
 
 - One ticket per key feature; extend a ticket before adding one. No estimates, no sub-tickets.
 - Each has a description, tasks and acceptance criteria. Copy an existing one to start a new one.
 - `Who`: `agent` = AI alone · `together` = AI builds, a human checks · `human` (`H-XXX`) = only a human. Agents never tick or close human work.
-- Finished: set `Status: done`, move the file to `done/`, move its line in the overview, update STATUS.md.
+- Finished: set `Status: done`, move the file to `done/`, update STATUS.md.
