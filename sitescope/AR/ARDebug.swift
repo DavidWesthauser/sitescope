@@ -1,34 +1,27 @@
 #if DEBUG
     import ARKit
+    import Combine
     import RealityKit
     import SwiftUI
     import UIKit
 
-    /// Developer toggles for the AR screen, kept in UserDefaults. Debug builds only, everything off by default.
-    /// None of these change what is saved in a room map; the mesh only changes the session configuration.
+    /// Developer toggles for the AR screen. Debug builds only. Everything is off at every launch, so a forgotten
+    /// toggle never changes a later test. None of these change what is saved in a room map; the mesh only changes the
+    /// session configuration.
     @MainActor final class ARDebugSettings: ObservableObject {
         static let shared = ARDebugSettings()
-        private let defaults = UserDefaults.standard
-        @Published var readout: Bool { didSet { save("readout", readout) } }
-        @Published var featurePoints: Bool { didSet { save("featurePoints", featurePoints) } }
+        /// Sent after a toggle that changes the AR view or the session has its new value.
+        let changed = PassthroughSubject<Void, Never>()
+        @Published var readout = false
+        @Published var featurePoints = false { didSet { changed.send() } }
         /// Needs a LiDAR phone. Applied when the session next starts, because it changes the configuration.
-        @Published var sceneMesh: Bool { didSet { save("sceneMesh", sceneMesh) } }
-        @Published var anchorGeometry: Bool { didSet { save("anchorGeometry", anchorGeometry) } }
-        @Published var anchorOrigins: Bool { didSet { save("anchorOrigins", anchorOrigins) } }
-        @Published var worldOrigin: Bool { didSet { save("worldOrigin", worldOrigin) } }
-        @Published var statistics: Bool { didSet { save("statistics", statistics) } }
+        @Published var sceneMesh = false { didSet { changed.send() } }
+        @Published var anchorGeometry = false { didSet { changed.send() } }
+        @Published var anchorOrigins = false { didSet { changed.send() } }
+        @Published var worldOrigin = false { didSet { changed.send() } }
+        @Published var statistics = false { didSet { changed.send() } }
         var meshSupported: Bool { ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) }
-        private init() {
-            func flag(_ key: String) -> Bool { UserDefaults.standard.bool(forKey: "debug.ar." + key) }
-            readout = flag("readout")
-            featurePoints = flag("featurePoints")
-            sceneMesh = flag("sceneMesh")
-            anchorGeometry = flag("anchorGeometry")
-            anchorOrigins = flag("anchorOrigins")
-            worldOrigin = flag("worldOrigin")
-            statistics = flag("statistics")
-        }
-        private func save(_ key: String, _ value: Bool) { defaults.set(value, forKey: "debug.ar." + key) }
+        private init() {}
         var debugOptions: ARView.DebugOptions {
             var options: ARView.DebugOptions = []
             if featurePoints { options.insert(.showFeaturePoints) }
@@ -46,6 +39,8 @@
         @Published private(set) var readout = DebugReadout()
         private var meter = FrameRateMeter()
         private var lastPublish: TimeInterval = 0
+        /// Call when the session pauses or restarts, so the first new frame is not timed against an old one.
+        func resetFrameRate() { meter.reset() }
         func observe(_ frame: ARFrame, planes: Int) {
             meter.tick(frame.timestamp)
             guard frame.timestamp - lastPublish >= 0.5 else { return }
@@ -127,14 +122,14 @@
                         Toggle("Render statistics", isOn: $settings.statistics)
                         Button("Copy readout", systemImage: "doc.on.doc") {
                             UIPasteboard.general.string = monitor.readout.text
-                        }
+                        }.disabled(!settings.readout)
                     }
                     Section("Scene") {
                         Toggle("Feature points", isOn: $settings.featurePoints)
                         Toggle("LiDAR mesh", isOn: $settings.sceneMesh).disabled(!settings.meshSupported)
                         Text(
                             settings.meshSupported
-                                ? "The mesh starts with the next session: restart the scan or reopen AR."
+                                ? "The mesh starts with the next AR session: close and reopen AR. Restarting a scan would discard it."
                                 : "This phone has no LiDAR scanner."
                         ).font(.footnote).foregroundStyle(.secondary)
                         Toggle("Plane geometry", isOn: $settings.anchorGeometry)
