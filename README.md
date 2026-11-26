@@ -13,7 +13,7 @@ Native iOS 17+ (SwiftUI, ARKit, RealityKit), LiDAR not required, no third-party 
 | [docs/README.md](docs/README.md) | Docs index |
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Requirements and grading |
 | [docs/STATUS.md](docs/STATUS.md) | What is done and what is missing |
-| [docs/tickets/](docs/tickets/README.md) | Work items |
+| [docs/tickets/](docs/tickets/) | Work items |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Code structure and spatial contract |
 | [docs/BACKEND_SETUP.md](docs/BACKEND_SETUP.md) | Supabase setup and seed data |
 | [docs/DEVICE_TESTING.md](docs/DEVICE_TESTING.md) | Manual iPhone tests |

@@ -2,7 +2,7 @@
 
 Native iOS 17+ app (SwiftUI, ARKit, RealityKit) with a Supabase backend. DHBW course project by Leonard Aichele and David Westhauser.
 
-State: `docs/STATUS.md`. Tickets: `docs/tickets/README.md`. Other docs: `docs/README.md`.
+State: `docs/STATUS.md`. Tickets: `docs/tickets/todo/` and `docs/tickets/done/`, order in `docs/STATUS.md`. Other docs: `docs/README.md`.
 
 ## Commands
 - Core tests: `swift test`

@@ -1,6 +1,6 @@
 # Project status
 
-Snapshot: **2026-11-19**. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); ticket IDs to [tickets/](tickets/README.md).
+Snapshot: **2026-11-19**. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); ticket IDs to [tickets/](tickets/).
 
 ## Summary
 
@@ -10,6 +10,10 @@ Snapshot: **2026-11-19**. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENT
 - Supabase client, auth, Keychain, 4 migrations, RLS and a 31-assertion pgTAP suite are **written but never deployed or run**. The cloud requirements (G2, G3, M1 server side, M4, M6) are therefore not met yet.
 - Missing entirely: houses level (M9), comments (M8), offline sync queue (M2), 3D viewer (M3 part 2), multi-role permissions (M5), language setting, LiDAR mode, 3D/video export, 2FA.
 - History was squashed into one `init` commit on 2026-11-05; regular small commits by both members from now on (P2, H-004).
+
+## Ticket order
+
+T-010 readout → H-001 → rest of T-010 → T-027 → T-003 → H-003 → T-008 → T-005 → T-006 → T-011 → T-015 → H-005 → H-006 → H-007. Any time: H-002, H-004, T-009, T-012, T-028. T-021 only if time remains.
 
 ## Requirement status
 
