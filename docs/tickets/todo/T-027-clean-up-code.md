@@ -14,10 +14,17 @@ A smaller code base that both members can read and explain. Waits for H-001, whi
 - [ ] **Delete:** code only tests use (`ARController.confirm()`, `ScanVisualization.rotate`, `ScanProgress.stage`, `horizontalCount`, `verticalCount`) and AR extras dropped in H-002. Move test fixtures off `.text`.
 - [ ] **Database:** merge the four migrations into one clean schema without those fields (they were never deployed; confirm first); run the pgTAP suite for the first time.
 - [ ] **Bugs:** files left behind after deleting rooms or projects, replacing images or failed saves; the Project screen never reloads its name field from the store (a rename from another device or a failed save leaves the draft in the title); in cloud mode a room rename does not reload `store.rooms`, so the project's room list keeps the old name until refresh; any unreadable sign-up reply shows "check your email"; the 100 MB limit is checked after the download; the export button stays disabled if the share sheet is torn down; export file named after the project.
-- [ ] **Split:** `ARScreen`, `ManagementViews` and the import/export part of `Store`, without behavior change. Move the name trimming and title fallback from `NameSection` into `Core/` with unit tests. Share one raycast helper, name the limits. Views do not call `Backend`.
+- [ ] **Split:** `ARScreen`, `ManagementViews` and the import/export part of `Store`, without behavior change. Share one raycast helper, name the limits. Views do not call `Backend`.
+- [ ] **Separate UI and logic:** `ProjectDetailView` and `RoomDetailView` decide themselves how to rename and delete (they call `store.run` with backend operations and check whether the item still exists), and the name trimming sits in `NameSection.swift`. Goal: views only show data and call `Store` methods; the `Store` owns the logic.
+  - Move rename and delete for projects and rooms into `Store` (for example `renameProject(id:name:)`, `deleteProject(id:)`). The `Store` handles queuing, trimming and the "already deleted" check.
+  - Views only call these methods and react to the result: no backend calls or existence checks in views.
+  - Move the name trimming (`titleOrFallback` and the trim logic in `NameSection.commit`) into `Core/` with a unit test.
+  - No UI or behavior change. Keep it small: no new layers such as a view model per screen unless clearly needed.
 
 ## Acceptance criteria
 
 - [ ] Unit test: an old local file and an old archive with removed fields still open.
 - [ ] One test per bug; no file another note uses is removed.
+- [ ] Unit tests: name trimming in `Core/`; `Store` skips renaming a deleted project or room.
+- [ ] Existing UI tests pass unchanged after separating UI and logic.
 - [ ] Lint, `swift test`, simulator tests and `supabase test db` pass.
