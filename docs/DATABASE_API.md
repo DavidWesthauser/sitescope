@@ -2,7 +2,7 @@
 
 How a client or AI agent reads and writes sitescope data through the Supabase API.
 
-**Status (2026-11-26):** describes the **draft** schema (projects → houses → rooms, roles, comments; the draft SQL file `database_schema_draft.sql` is not in the repository yet). It is **not a migration yet** and not deployed; the app still uses `supabase/migrations/` (projects → rooms, owner/member), which is only a placeholder. Verified on plain PostgreSQL 16 with a stubbed `auth` schema only. Open product decisions are listed at the end. Storage policies for the new model are not written yet. Turning this into migrations belongs to T-005/T-006.
+**Status (2026-11-26):** describes the **draft** schema in [database_schema_draft.sql](database_schema_draft.sql) (projects → houses → rooms, roles, comments). It is **not a migration yet** and not deployed; the app still uses `supabase/migrations/` (projects → rooms, owner/member). Verified on plain PostgreSQL 16 with a stubbed `auth` schema only. Open product decisions are listed at the end. Storage policies for the new model are not written yet. Turning this into migrations belongs to T-005/T-006.
 
 ## Rules for agents
 
