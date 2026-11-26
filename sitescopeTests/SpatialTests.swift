@@ -126,6 +126,33 @@ final class SpatialTests: XCTestCase {
         XCTAssertNil(DrawingGeometry.measuredPoint(camera: camera, direction: .zero, distance: 2))
         XCTAssertNil(DrawingGeometry.measuredPoint(camera: camera, direction: direction, distance: .nan))
     }
+    func testSurfacePointFacesViewerAndLiftsOffSurface() throws {
+        let viewer = SIMD3<Float>(0, 0, 0)
+        let hit = SIMD3<Float>(0, 0, -1)
+        // A mesh normal pointing away from the viewer is flipped, so the lift moves toward the viewer.
+        let away = try XCTUnwrap(DrawingGeometry.surfacePoint(hit: hit, normal: SIMD3(0, 0, -2), viewer: viewer))
+        XCTAssertEqual(away.normal, SIMD3(0, 0, 1))
+        XCTAssertEqual(away.point.z, -0.997, accuracy: 0.0001)
+        let toward = try XCTUnwrap(DrawingGeometry.surfacePoint(hit: hit, normal: SIMD3(0, 0, 1), viewer: viewer))
+        XCTAssertEqual(toward.point, away.point)
+        XCTAssertNil(DrawingGeometry.surfacePoint(hit: hit, normal: .zero, viewer: viewer))
+        XCTAssertNil(DrawingGeometry.surfacePoint(hit: SIMD3(0, 0, -0.1), normal: SIMD3(0, 0, 1), viewer: viewer))
+        XCTAssertNil(DrawingGeometry.surfacePoint(hit: SIMD3(0, 0, -6), normal: SIMD3(0, 0, 1), viewer: viewer))
+        XCTAssertNil(DrawingGeometry.surfacePoint(hit: SIMD3(.nan, 0, -1), normal: SIMD3(0, 0, 1), viewer: viewer))
+    }
+    func testConsistentNormalRejectsNoisyOrSparseSamples() throws {
+        let tilted = simd_normalize(SIMD3<Float>(0.1, 0, 1))
+        let mean = try XCTUnwrap(
+            DrawingGeometry.consistentNormal([SIMD3(0, 0, 1), SIMD3(0, 0, 3), tilted, SIMD3(-0.1, 0, 1)]))
+        XCTAssertEqual(mean.x, 0, accuracy: 0.0001)
+        XCTAssertEqual(simd_length(mean), 1, accuracy: 0.0001)
+        // One sample at 45° is outside the 20° default, and three samples are fewer than the default four.
+        XCTAssertNil(
+            DrawingGeometry.consistentNormal([SIMD3(0, 0, 1), SIMD3(0, 0, 1), SIMD3(0, 0, 1), SIMD3(1, 0, 1)]))
+        XCTAssertNil(DrawingGeometry.consistentNormal([SIMD3(0, 0, 1), SIMD3(0, 0, 1), SIMD3(0, 0, 1)]))
+        XCTAssertNil(
+            DrawingGeometry.consistentNormal([SIMD3(0, 0, 1), SIMD3(0, 0, -1), SIMD3(0, 0, 1), SIMD3(0, 0, -1)]))
+    }
     func testMarkerRecoveryAcrossDifferentOriginsAndYaw() throws {
         let roomFromMarker = try transform(SIMD3(3, 1, -4), yaw: 0.3)
         let expected = try transform(SIMD3(-7, 0.2, 5), yaw: -1.2)
