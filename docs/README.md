@@ -10,6 +10,7 @@ Start here. This folder is the single source of truth for the sitescope course p
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Code layout, data flow, spatial/coordinate contract, storage and transfer format | Structure or a core contract changes |
 | [CONVENTIONS.md](CONVENTIONS.md) | Code style, comments, naming, layering; formatter/linter commands; ticket rules | A convention is agreed or a lint rule changes |
 | [BACKEND_SETUP.md](BACKEND_SETUP.md) | Reproducible Supabase setup, migrations, seed data, test accounts | Migrations, seed or config change |
+| [DATABASE_API.md](DATABASE_API.md) | Target database model, permission levels and how to read/write it through the Supabase API (draft schema, supersedes the placeholder migrations) | The schema, permissions or API usage change; when T-005/T-006 turn it into migrations |
 | [DEVICE_TESTING.md](DEVICE_TESTING.md) | Manual acceptance checklist for real iPhones (AR cannot be tested in the simulator) | A new AR/device feature lands |
 | [AI_USAGE.md](AI_USAGE.md) | AI tool use, concrete reviewed/corrected examples, handover topics | Any notable AI correction; before submission |
 | [decisions/](decisions/) | Architecture decision records (why, not how) | A significant design choice is made |
