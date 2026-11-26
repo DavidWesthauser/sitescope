@@ -9,7 +9,7 @@ A smaller code base that both members can read and explain. Waits for H-001, whi
 
 ## Tasks
 
-- [ ] **Delete:** printed markers and reference points (`Marker`, three `Room` fields, `AlignmentMath`, `AlignmentMethod`); keep `AlignmentMath.manual` if T-010 uses it. Old JSON keys are ignored, so no legacy types are needed.
+- [ ] **Delete:** printed markers and reference points (`Marker`, three `Room` fields, `AlignmentMath` including `AlignmentMath.manual`, `AlignmentMethod`). Old JSON keys are ignored, so no legacy types are needed.
 - [ ] **Delete:** drawing kinds `marker`, `text`, `arrow` with `draftText`, `addArrow`, `ArrowGeometry`. Convert such notes on load first if H-001 found any: an unknown kind makes the whole local file unreadable.
 - [ ] **Delete:** code only tests use (`ARController.confirm()`, `ScanVisualization.rotate`, `ScanProgress.stage`, `horizontalCount`, `verticalCount`) and AR extras dropped in H-002. Move test fixtures off `.text`.
 - [ ] **Database:** merge the four migrations into one clean schema without those fields (they were never deployed; confirm first); run the pgTAP suite for the first time.

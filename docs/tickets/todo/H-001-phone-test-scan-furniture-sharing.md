@@ -17,6 +17,7 @@ Run everything in local mode, **before** adding `Secrets.xcconfig` (cloud mode b
 - [ ] **Furniture:** 5 tries after each step: one chair moved; table cleared and several chairs moved; a large piece moved (sofa or cupboard). Record whether wall notes stay correct, and what happens to a note placed on furniture that moved.
 - [ ] **Sharing:** send the project by AirDrop from A to B and recognize on B, 10 tries. Repeat from B to A.
 - [ ] **Different phones:** include a LiDAR iPhone in both directions if one can be borrowed, and two iOS versions if available.
+- [ ] **Point cloud (T-028):** the feature points shown while scanning are readable and do not slow the scan.
 - [ ] **Rooms:** one room with many details, one with mostly blank walls, one large room.
 - [ ] **Robustness:** scan for 2, 5 and 10 minutes (an earlier long-scan crash was reported; collect the `.ips` file), deny camera access, background and return.
 
@@ -35,4 +36,4 @@ Proposed bar: at least 8 of 10 tries recognized within 40 s, error at most 10 cm
 | Bar reached, also after moved furniture | Keep ARWorldMap |
 | Fails only after furniture or light changed | T-010, "Update scan" |
 | Recognized, but notes are offset | T-010, use the anchor position first, then repeat |
-| Often not recognized, or only fails on the second phone | T-010, fallback, before building more features |
+| Often not recognized, or only fails on the second phone | T-010, update the scan or rescan the room, before building more features |
