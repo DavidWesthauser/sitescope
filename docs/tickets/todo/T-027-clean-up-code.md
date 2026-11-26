@@ -13,8 +13,8 @@ A smaller code base that both members can read and explain. Waits for H-001, whi
 - [ ] **Delete:** drawing kinds `marker`, `text`, `arrow` with `draftText`, `addArrow`, `ArrowGeometry`. Convert such notes on load first if H-001 found any: an unknown kind makes the whole local file unreadable.
 - [ ] **Delete:** code only tests use (`ARController.confirm()`, `ScanVisualization.rotate`, `ScanProgress.stage`, `horizontalCount`, `verticalCount`) and AR extras dropped in H-002. Move test fixtures off `.text`.
 - [ ] **Database:** merge the four migrations into one clean schema without those fields (they were never deployed; confirm first); run the pgTAP suite for the first time.
-- [ ] **Bugs:** files left behind after deleting rooms or projects, replacing images or failed saves; `Store.run` ignores actions while busy; any unreadable sign-up reply shows "check your email"; the 100 MB limit is checked after the download; the export button stays disabled if the share sheet is torn down; export file named after the project.
-- [ ] **Split:** `ARScreen`, `ManagementViews` and the import/export part of `Store`, without behavior change. Share one raycast helper, name the limits. Views do not call `Backend`.
+- [ ] **Bugs:** files left behind after deleting rooms or projects, replacing images or failed saves; the Project screen never reloads its name field from the store (a rename from another device or a failed save leaves the draft in the title); in cloud mode a room rename does not reload `store.rooms`, so the project's room list keeps the old name until refresh; any unreadable sign-up reply shows "check your email"; the 100 MB limit is checked after the download; the export button stays disabled if the share sheet is torn down; export file named after the project.
+- [ ] **Split:** `ARScreen`, `ManagementViews` and the import/export part of `Store`, without behavior change. Move the name trimming and title fallback from `NameSection` into `Core/` with unit tests. Share one raycast helper, name the limits. Views do not call `Backend`.
 
 ## Acceptance criteria
 

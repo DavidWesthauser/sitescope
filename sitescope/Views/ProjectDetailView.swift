@@ -10,6 +10,8 @@ struct ProjectDetail: View {
     @State private var email = ""
     @State private var addRoom = false
     @State private var deleting = false
+    /// Set once the delete succeeded, so the name field's save on disappear does not touch the deleted project.
+    @State private var deleted = false
     var manager: Bool { project.owner_id == store.userID }
     /// The store's copy, so a rename shows immediately without leaving the screen.
     private var current: Project { store.projects.first(where: { $0.id == project.id }) ?? project }
@@ -86,6 +88,7 @@ struct ProjectDetail: View {
                             Button("Delete Project", role: .destructive) {
                                 store.run {
                                     try await store.deleteProject(project)
+                                    deleted = true
                                     dismiss()
                                 }
                             }.accessibilityIdentifier("project.delete.confirm")
@@ -117,8 +120,13 @@ struct ProjectDetail: View {
         }
     }
 
+    private var projectExists: Bool { !deleted && store.projects.contains(where: { $0.id == project.id }) }
+
     private func rename(_ name: String) {
+        guard projectExists else { return }
         store.run {
+            // Checked again when the queued rename runs: a delete may have finished in between.
+            guard projectExists else { return }
             do {
                 try await store.renameProject(project, name: name)
             } catch {

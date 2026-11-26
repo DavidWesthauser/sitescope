@@ -9,6 +9,8 @@ struct RoomDetail: View {
     @State private var room: Room?
     @State private var arMode: ARMode?
     @State private var deleting = false
+    /// Set once the delete succeeded, so the name field's save on disappear does not touch the deleted room.
+    @State private var deleted = false
     @State private var nameDraft: String
     var current: Room { room ?? initialRoom }
     var manager: Bool { project.owner_id == store.userID }
@@ -78,6 +80,7 @@ struct RoomDetail: View {
                             Button("Delete Room", role: .destructive) {
                                 store.run {
                                     try await store.deleteRoom(current)
+                                    deleted = true
                                     dismiss()
                                 }
                             }.accessibilityIdentifier("room.delete.confirm")
@@ -133,8 +136,14 @@ struct RoomDetail: View {
         }
     }
 
+    /// Cloud mode keeps deleted rooms in `store.rooms` until reload, so the flag covers that case.
+    private var roomExists: Bool { !deleted && store.rooms.contains(where: { $0.id == initialRoom.id }) }
+
     private func rename(_ name: String) {
+        guard roomExists else { return }
         store.run {
+            // Checked again when the queued rename runs: a delete may have finished in between.
+            guard roomExists else { return }
             do {
                 try await store.renameRoom(current, name: name)
                 await refresh()

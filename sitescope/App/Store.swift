@@ -112,12 +112,22 @@ private struct LocalData: Codable, Sendable {
         try await change.value
     }
     var userID: UUID? { isLocalMode ? LocalData.userID : backend?.user?.id }
+    /// Actions waiting for the one that is running.
+    private var queuedOperations: [@MainActor () async throws -> Void] = []
+    /// Runs user actions one at a time, in order. An action started while another runs waits for it instead of
+    /// being dropped, so a Delete confirmed during a rename, or a rename typed during another save, still happens.
+    /// `busy` stays true until the queue is empty; a failing action reports its error and the next one still runs.
     func run(_ operation: @escaping @MainActor () async throws -> Void) {
+        queuedOperations.append(operation)
         guard !busy else { return }
         busy = true
         Task {
+            // Main actor: nothing can enqueue between the last check of the loop and resetting `busy`.
             defer { busy = false }
-            do { try await operation() } catch { self.error = error.localizedDescription }
+            while !queuedOperations.isEmpty {
+                let next = queuedOperations.removeFirst()
+                do { try await next() } catch { self.error = error.localizedDescription }
+            }
         }
     }
     func client() throws -> Backend {

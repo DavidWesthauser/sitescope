@@ -246,7 +246,7 @@ struct ARScreen: View {
         }
         .alert(
             // HIG (Alerts): the title names the situation when AR cannot run at all.
-            ar.error == ARController.unsupportedMessage ? "AR Not Available" : "AR guidance",
+            ar.isUnsupported ? "AR Not Available" : "AR guidance",
             isPresented: Binding(get: { ar.error != nil }, set: { if !$0 { ar.error = nil } }),
             actions: { Button("OK") { ar.error = nil } },
             message: { Text(ar.error ?? "") }
