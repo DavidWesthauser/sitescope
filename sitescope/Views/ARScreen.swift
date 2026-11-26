@@ -95,6 +95,9 @@ struct ARScreen: View {
     var body: some View {
         ZStack {
             CameraView(controller: ar).ignoresSafeArea()
+            #if DEBUG
+                ARDebugOverlay(ar: ar).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            #endif
             if let frame = ar.frozenFrame { FrozenDrawingView(ar: ar, frame: frame).ignoresSafeArea() }
             if mode == .mapping {
                 scanOverlay
