@@ -257,8 +257,24 @@ final class ScreenshotTour: XCTestCase {
         let folder = output.deletingLastPathComponent().appendingPathComponent(".seed-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try contents.write(to: folder.appendingPathComponent("local.json"), atomically: true, encoding: .utf8)
+        // Placeholder map files, so export finds every referenced asset. AR never opens them in the tour.
+        for path in Self.mapPaths {
+            let file = folder.appendingPathComponent("assets").appendingPathComponent(path)
+            try FileManager.default.createDirectory(
+                at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("map".utf8).write(to: file)
+        }
         return folder
     }
+
+    /// Store layout for room assets: `<project>/<room>/<file>`, lower-case IDs.
+    private static func mapPath(_ project: String, _ room: String) -> String {
+        "\(project.lowercased())/\(room.lowercased())/map.worldmap"
+    }
+    private static let mapPaths = [
+        mapPath("10000000-0000-0000-0000-000000000001", "20000000-0000-0000-0000-000000000001"),
+        mapPath("10000000-0000-0000-0000-000000000001", "20000000-0000-0000-0000-000000000003"),
+    ]
 
     private func shot(_ name: String) {
         let data = XCUIScreen.main.screenshot().pngRepresentation
@@ -329,7 +345,7 @@ final class ScreenshotTour: XCTestCase {
         let office = "20000000-0000-0000-0000-000000000003"
         let kitchenCoordinate = "30000000-0000-0000-0000-000000000001"
         func room(_ id: String, _ project: String, _ name: String, mapped: Bool, _ coordinate: String) -> String {
-            let map = mapped ? ", \"map_path\": \"maps/\(id).worldmap\"" : ""
+            let map = mapped ? ", \"map_path\": \"\(ScreenshotTour.mapPath(project, id))\"" : ""
             return """
                 {"id": "\(id)", "project_id": "\(project)", "name": "\(name)", "spatial_version": 1,
                  "coordinate_id": "\(coordinate)", "reference_points": [], "reference_notes": ""\(map)}
