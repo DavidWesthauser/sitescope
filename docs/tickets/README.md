@@ -2,9 +2,9 @@
 
 Open a ticket for the full description. 🤖 agent = AI alone · 🤝 together = AI builds, a human checks · 🧑 human = only a human.
 
-**Order:** T-010 readout → H-001 → rest of T-010 → T-027 → T-003 → H-003 → T-008 → T-005 → T-006 → T-011 → T-015 → H-005 → H-006 → H-007. Any time: H-002, H-004, T-009, T-012. T-021 only if time remains.
+**Order:** T-010 readout → H-001 → rest of T-010 → T-027 → T-003 → H-003 → T-008 → T-005 → T-006 → T-011 → T-015 → H-005 → H-006 → H-007. Any time: H-002, H-004, T-009, T-012, T-028. T-021 only if time remains.
 
-## To do (18)
+## To do (19)
 
 | Ticket | In short | Who |
 |---|---|---|
@@ -18,6 +18,7 @@ Open a ticket for the full description. 🤖 agent = AI alone · 🤝 together =
 | [T-015 Tests, README and seed data](todo/T-015-tests-readme.md) | Central UI tests, README and demo data so graders can run everything. | 🤖 agent |
 | [T-027 Clean up: abandoned code, bugs and large files](todo/T-027-clean-up-code.md) | Delete abandoned code, fix known bugs, split the big files. | 🤖 agent |
 | [T-012 Dark mode and UI quality](todo/T-012-dark-mode-ui-quality.md) | Dark mode, clear errors, accessibility and small UI fixes. | 🤖 agent |
+| [T-028 Scan view with feature points](todo/T-028-scan-feature-points.md) | While scanning, show the feature points instead of animated surface patches. | 🤖 agent |
 | [T-021 NICE-TO-HAVEs](todo/T-021-nice-to-haves.md) | Optional extras: German, LiDAR, export, 2FA, live progress. | 🤝 together |
 | [H-001 Phone test: accuracy, moved furniture and sharing](todo/H-001-phone-test-scan-furniture-sharing.md) | Test accuracy, moved furniture and sharing on real iPhones. | 🧑 human |
 | [H-002 Decide open product questions](todo/H-002-product-decisions.md) | Answer the open questions that change what gets built. | 🧑 human |
