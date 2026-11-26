@@ -107,8 +107,8 @@ struct ARScreen: View {
                         Button {
                             closing = true
                         } label: {
-                            Image(systemName: "xmark").font(.system(size: 20, weight: .semibold)).frame(
-                                width: 44, height: 44)
+                            Image(systemName: "xmark").font(.title3.weight(.semibold)).frame(
+                                minWidth: 44, minHeight: 44)
                         }.accessibilityLabel("Close")
                         Text(room.name).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8).frame(
                             maxWidth: .infinity)
@@ -116,8 +116,8 @@ struct ARScreen: View {
                             ar.resumeCamera()
                             taskList = true
                         } label: {
-                            Image(systemName: "list.bullet").font(.system(size: 20, weight: .semibold)).frame(
-                                width: 44, height: 44)
+                            Image(systemName: "list.bullet").font(.title3.weight(.semibold)).frame(
+                                minWidth: 44, minHeight: 44)
                         }.accessibilityLabel("Tasks")
                     }.padding(.horizontal, 8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 5) {
@@ -442,8 +442,8 @@ struct ARScreen: View {
                     Button {
                         showingScanOptions = true
                     } label: {
-                        Image(systemName: "slider.horizontal.3").font(.system(size: 18, weight: .medium)).frame(
-                            width: 44, height: 44
+                        Image(systemName: "slider.horizontal.3").font(.body.weight(.medium)).frame(
+                            minWidth: 44, minHeight: 44
                         )
                         .background(.black.opacity(0.16), in: Circle())
                     }.buttonStyle(.plain).accessibilityLabel("Scan options and progress")
