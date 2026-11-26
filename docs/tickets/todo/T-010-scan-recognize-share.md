@@ -9,7 +9,7 @@ The core of the app: scan a room, find the notes again later, also after the roo
 
 ## Tasks
 
-- [ ] **Before H-001:** Debug-only readout with a copy button: scan time, map size and feature points, seconds until recognized, and how far the restored anchor is from the assumed position (today the app ignores its position), phone model and iOS version. No change to AR behavior.
+- [ ] **Before H-001:** Debug-only readout with a copy button: scan time, map size and feature points, seconds until recognized, and how far the restored anchor is from the assumed position (today the app ignores its position), phone model and iOS version. Debug builds also get a developer panel with toggles for ARKit's built-in debug views (feature points, LiDAR mesh preview, plane geometry, anchor and world origins, render statistics). No change to AR behavior in Release builds.
 - [ ] **After H-001, if notes are offset:** place notes relative to the restored anchor instead of the identity.
 - [ ] **After H-001:** "Update scan" for changed rooms: recognize with the old map, keep scanning, save a new map version with the same `coordinate_id`, keep notes and allow undo. Today a map can never be replaced; adjust the local rule and the database trigger.
 - [ ] Tell users to place notes on walls and fixed objects; suggest "Update scan" after slow recognition.

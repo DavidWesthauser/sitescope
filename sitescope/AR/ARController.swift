@@ -1,5 +1,6 @@
 import ARKit
 import AVFoundation
+import Combine
 import RealityKit
 import SwiftUI
 import simd
@@ -94,6 +95,10 @@ struct FrozenDrawingFrame {
     var interrupted = false
     private var tapRecognizer: UITapGestureRecognizer?
     var mapSave = MapSaveTransaction()
+    #if DEBUG
+        let debug = ARDebugMonitor()
+        private var debugObserver: AnyCancellable?
+    #endif
 
     init(room: Room, mode: ARMode) {
         self.room = room
@@ -112,6 +117,13 @@ struct FrozenDrawingFrame {
         view.addGestureRecognizer(tap)
         tapRecognizer = tap
         view.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(dragged(_:))))
+        #if DEBUG
+            view.debugOptions = ARDebugSettings.shared.debugOptions
+            debugObserver = ARDebugSettings.shared.objectWillChange.sink { [weak self] _ in
+                // `objectWillChange` fires before the new value is set; read it on the next turn.
+                DispatchQueue.main.async { self?.view.debugOptions = ARDebugSettings.shared.debugOptions }
+            }
+        #endif
         memoryObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -185,6 +197,11 @@ struct FrozenDrawingFrame {
         config.initialWorldMap = map
         // No depth stream or environment probes: nothing reads them, and both cost GPU time every frame.
         config.environmentTexturing = .none
+        #if DEBUG
+            if ARDebugSettings.shared.sceneMesh && ARDebugSettings.shared.meshSupported {
+                config.sceneReconstruction = .mesh
+            }
+        #endif
         return config
     }
     /// Starts a session from scratch: tracking and anchors are dropped so the new origin is never mixed with the old one.
@@ -295,6 +312,9 @@ struct FrozenDrawingFrame {
     /// changes, so SwiftUI does not re-render on each camera frame.
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         guard running, !stopped, !interrupted else { return }
+        #if DEBUG
+            if ARDebugSettings.shared.readout { debug.observe(frame, planes: detectedSurfaces.count) }
+        #endif
         let issue: TrackingIssue
         switch frame.camera.trackingState {
         case .normal: issue = .none
