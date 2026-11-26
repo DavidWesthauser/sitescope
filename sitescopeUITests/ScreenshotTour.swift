@@ -180,6 +180,11 @@ final class ScreenshotTour: XCTestCase {
             if tapFirst(["Scan options and progress"]) {
                 pause()
                 shot("21-ar-scan-options")
+                if tapFirst(["Restart scan"]) {
+                    pause()
+                    shot("22-ar-restart-dialog")
+                    dismissDialog()
+                }
                 tapFirst(["Done"])
             }
             pause()

@@ -88,13 +88,13 @@ final class WorkflowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Map room"].waitForExistence(timeout: 5))
         app.buttons["Map room"].tap()
         #if targetEnvironment(simulator)
-            XCTAssertTrue(app.alerts["AR guidance"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.alerts["AR Not Available"].waitForExistence(timeout: 5))
             XCTAssertTrue(
                 app.alerts.staticTexts["This device does not support AR world tracking. Use the task list instead."]
                     .exists)
             app.alerts.buttons["OK"].tap()
         #else
-            if app.alerts["AR guidance"].waitForExistence(timeout: 3) { app.alerts.buttons["OK"].tap() }
+            if app.alerts["AR Not Available"].waitForExistence(timeout: 3) { app.alerts.buttons["OK"].tap() }
         #endif
         XCTAssertTrue(app.staticTexts["Live scan"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["scan.finish"].exists)

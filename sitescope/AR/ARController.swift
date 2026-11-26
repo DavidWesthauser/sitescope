@@ -135,12 +135,14 @@ struct FrozenDrawingFrame {
         renderingReduced = true
         releaseSurfaceRendering()
     }
+    /// Shown when the device cannot run world tracking (for example the simulator); the alert title depends on it.
+    static let unsupportedMessage = "This device does not support AR world tracking. Use the task list instead."
     /// Loads annotations and the saved map before AR starts. Failures set `error` and keep the task list usable
     /// instead of blocking the screen, because tasks do not need AR.
     func prepare(store: Store) async {
         do {
             guard ARWorldTrackingConfiguration.isSupported else {
-                throw AppError.message("This device does not support AR world tracking. Use the task list instead.")
+                throw AppError.message(Self.unsupportedMessage)
             }
             let granted = await AVCaptureDevice.requestAccess(for: .video)
             guard granted else {

@@ -30,6 +30,25 @@ extension View {
     }
 }
 
+extension View {
+    /// Label color for `.borderedProminent` buttons on the accent fill. The dark accent (#4FD1DC) is light, so
+    /// white text would be about 1.8:1; black reaches 11.5:1. Light mode keeps white (5.7:1 on #00727F).
+    func prominentLabelContrast() -> some View { modifier(ProminentLabelContrast()) }
+}
+
+private struct ProminentLabelContrast: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+    func body(content: Content) -> some View {
+        // A disabled button keeps the system's dimmed label.
+        if isEnabled {
+            content.foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
+        } else {
+            content
+        }
+    }
+}
+
 /// Sets `overrideUserInterfaceStyle` on the hosting window, so everything presented from it follows the setting.
 private struct WindowAppearance: UIViewRepresentable {
     let style: UIUserInterfaceStyle

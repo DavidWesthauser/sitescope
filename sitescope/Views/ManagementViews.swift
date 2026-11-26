@@ -292,6 +292,7 @@ struct LocalDataRecoveryView: View {
                 )
             } actions: {
                 Button("Start fresh, keep backup") { confirming = true }.buttonStyle(.borderedProminent)
+                    .controlSize(.large).prominentLabelContrast()
                     .confirmationDialog(
                         "Start with an empty project list? The unreadable file is moved to a backup, not deleted.",
                         isPresented: $confirming, titleVisibility: .visible

@@ -242,7 +242,9 @@ struct ARScreen: View {
             if phase == .active { ar.resume() } else if phase == .background { ar.suspend() }
         }
         .alert(
-            "AR guidance", isPresented: Binding(get: { ar.error != nil }, set: { if !$0 { ar.error = nil } }),
+            // HIG (Alerts): the title names the situation when AR cannot run at all.
+            ar.error == ARController.unsupportedMessage ? "AR Not Available" : "AR guidance",
+            isPresented: Binding(get: { ar.error != nil }, set: { if !$0 { ar.error = nil } }),
             actions: { Button("OK") { ar.error = nil } },
             message: { Text(ar.error ?? "") }
         )
@@ -361,6 +363,7 @@ struct ARScreen: View {
             } else if ar.mapAvailable {
                 if ar.localization.state == .failed {
                     Button("Keep searching") { ar.continueSearching() }.buttonStyle(.borderedProminent)
+                        .prominentLabelContrast()
                 }
                 Button("Restart recognition") { ar.startMap() }.buttonStyle(.bordered).disabled(!ar.ready)
             } else {
@@ -492,10 +495,12 @@ struct ARScreen: View {
                         "Restart and discard this unsaved scan?", isPresented: $restartingScan,
                         titleVisibility: .visible
                     ) {
+                        // Stays destructive: restarting discards the unsaved scan progress.
                         Button("Restart scan", role: .destructive) {
                             showingScanOptions = false
                             ar.startMapping()
                         }
+                        Button("Cancel", role: .cancel) {}
                     }
                     .navigationTitle("Scan options").navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -619,7 +624,7 @@ struct ARScreen: View {
                 Label("Save", systemImage: "checkmark").font(.headline).lineLimit(1).minimumScaleFactor(0.75).frame(
                     maxWidth: .infinity, minHeight: 36)
             }
-            .buttonStyle(.borderedProminent).accessibilityIdentifier("drawing.save").disabled(
+            .buttonStyle(.borderedProminent).prominentLabelContrast().accessibilityIdentifier("drawing.save").disabled(
                 ar.draft.isEmpty || saving || ar.imageLoading || (ar.tool == .image && ar.imageData == nil))
         }
     }

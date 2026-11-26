@@ -41,6 +41,7 @@ struct RoomDetail: View {
             if tasks.isEmpty {
                 Section {
                     Text("No instructions yet").foregroundStyle(.secondary)
+                    addTaskRow
                 } header: {
                     Text("Tasks")
                 } footer: {
@@ -62,6 +63,9 @@ struct RoomDetail: View {
                         Label(status.label, systemImage: status.symbol)
                     }
                 }
+            }
+            if manager && !tasks.isEmpty {
+                Section { addTaskRow }
             }
             if manager {
                 // HIG (Buttons, Action sheets): destructive action in its own last section, with a confirmation.
@@ -94,6 +98,17 @@ struct RoomDetail: View {
         .fullScreenCover(
             item: $arMode, onDismiss: { Task { await refresh() } },
             content: { mode in ARScreen(room: current, mode: mode, manager: manager).environmentObject(store) })
+    }
+
+    /// Tasks are pinned to a spot in the room, so adding one opens the AR editor; an unmapped room must be mapped first.
+    @ViewBuilder private var addTaskRow: some View {
+        if manager {
+            if current.map_path != nil {
+                Button("Add task", systemImage: "plus") { arMode = .editing }.accessibilityIdentifier("tasks.new")
+            } else {
+                Label("Map the room to add tasks", systemImage: "plus").foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder private var spatialSection: some View {
