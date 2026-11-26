@@ -36,6 +36,13 @@ Rules every change follows. `swift format` checks the layout automatically; the 
 - No force unwrap (`!`) or `try!` in app code unless a comment explains why it cannot fail. Tests may use them.
 - Errors reach the user as readable messages (`AppError.message`); never swallow errors silently.
 - Prefer `NavigationStack`, system colors and SF Symbols so dark mode and accessibility work by default. Interactive elements get accessibility labels.
+- Colors: semantic system colors (`.primary`, `.secondary`, grouped backgrounds) or a named color from `sitescope/Resources/Assets.xcassets`; never a fixed RGB value. Only AR overlays on the camera image may use fixed white/black, and they force the dark scheme. Destructive buttons use `role: .destructive`. Brand colors, with WCAG contrast on rows (white / `#1C1C1E`):
+
+  | Asset | Light | Dark | High contrast (light / dark) |
+  |---|---|---|---|
+  | `AccentColor` | `#00727F` 5.7:1 (5.1:1 on `#F2F2F7`) | `#4FD1DC` 9.3:1 | `#00585F` 8.2:1 / `#8BE4EA` 11.7:1 |
+  | `Warning` | `#A84B00` 5.7:1 | `#FFA94D` 8.9:1 | `#8A3D00` 7.6:1 / `#FFC285` 10.8:1 |
+- HIG layout: a destructive action sits alone in the last section of its screen, with a footer, and asks through a `confirmationDialog` attached to its button (title names the item, Cancel has `role: .cancel`). Explanations go in section footers, not in rows. Names are edited inline (`NameSection`), and titles show the real name.
 - Secrets never in code or Git (`Secrets.xcconfig` is ignored).
 
 ## Tests
