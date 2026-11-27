@@ -262,6 +262,13 @@ $$;
 create trigger on_auth_user_created after insert on auth.users
 for each row execute function public.handle_new_user();
 
+-- Accounts that existed before this migration get their profile now, named like the trigger would name them.
+insert into public.profiles (user_id, display_name)
+select id, left(coalesce(nullif(btrim(raw_user_meta_data ->> 'display_name'), ''),
+    nullif(btrim(split_part(coalesce(email, ''), '@', 1)), ''), 'User'), 80)
+from auth.users
+on conflict (user_id) do nothing;
+
 -- Sets created_by / created_by_org / created_at from the session, so clients cannot forge them.
 create function public.stamp_creator() returns trigger
 language plpgsql security definer set search_path = '' as $$
