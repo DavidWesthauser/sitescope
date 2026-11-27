@@ -9,8 +9,8 @@ Each member has a role that decides what they may do, enforced on the server. A 
 
 ## Tasks
 
-- [ ] App: show and grant `member`/`external` at project, house and room scope (`grant_access`, `scope_level`); the schema already has the levels (T-003).
-- [ ] Swift `ProjectRole` replaces the `manager` flag; changes the server rejects show a clear message.
+- [x] App: show and grant `member`/`external` at project, house and room scope (`grant_access`, `scope_level`), hand over responsibility (T-003).
+- [x] Swift `AccessLevel` replaces the `manager` flag on project, house and room screens; the AR screens still take a `manager` flag (T-029).
 - [ ] Team section: members by email, invite, change role, remove.
 
 ## Acceptance criteria

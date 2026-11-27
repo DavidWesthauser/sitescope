@@ -1,46 +1,43 @@
 # Architecture
 
-Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies. Backend: Supabase (Postgres + RLS, Auth, Storage) via plain `URLSession`. Planned changes: one local-first storage path (T-008) and smaller files (T-027).
+Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies. Backend: Supabase (Postgres + RLS, Auth) via plain `URLSession`; the app is only usable while signed in. The database design is DATABASE_API.md; storing scans and AR instructions there comes with T-029, offline work with T-008.
 
 ## Layout
 
 | Path | Responsibility |
 |---|---|
-| `sitescope/App/SitescopeApp.swift` | Entry point; picks login / dashboard / data-recovery screen; handles opened project files |
+| `sitescope/App/SitescopeApp.swift` | Entry point: sign-in screen until signed in, then the project list |
 | `sitescope/App/Store.swift` | The app's view model: state all screens show, input validation, actions that call the services. No file or network code |
-| `sitescope/Services/DataRepository.swift` | Storage protocol used by `Store` and `ARController`; `ProjectSharing` for cloud-only sharing |
-| `sitescope/Services/LocalRepository.swift`, `LocalDataStore.swift` | On-device storage: `local.json` + `assets/`, queued atomic writes, recovery backup |
-| `sitescope/Services/CloudRepository.swift` | Supabase storage and sharing: table, RPC and bucket names |
-| `sitescope/Services/ProjectTransferService.swift` | Export and import of `.sitescope` project files (on-device only) |
+| `sitescope/Services/DataRepository.swift` | `DataRepository` (projects, houses, rooms, AR data) used by `Store` and `ARController`; `AccessManagement` (levels, grants, responsible, profiles, organizations) |
+| `sitescope/Services/CloudRepository.swift` | Both protocols on Supabase: table and RPC names. AR calls report T-029 until the database stores them |
+| `sitescope/Services/CloudRecords.swift` | Request bodies: only the columns clients may set, optionals as `null` |
 | `sitescope/Services/Backend.swift` | Supabase REST/Auth/Storage client, token refresh, Keychain session (`Vault`). Only the publishable key; RLS applies to every call |
-| `sitescope/Core/` | Pure, testable value types: `Models` (+ validation), `Spatial` (poses, alignment), `Scanning` (coverage gates), `TrackingQuality`, `DrawingGeometry`, `FreehandDraft`, `MapSaveTransaction`, `ProjectTransferArchive`, `RoomSurfaceModel`, `ScanRenderingBudget`, `ScanVisualization` |
+| `sitescope/Core/` | Pure, testable value types: `Models` (+ validation), `Spatial` (poses, alignment), `Scanning` (coverage gates), `TrackingQuality`, `DrawingGeometry`, `FreehandDraft`, `MapSaveTransaction`, `Access` (levels and the permission table), `RoomSurfaceModel`, `ScanRenderingBudget`, `ScanVisualization` |
 | `sitescope/AR/` | `ARController` (session lifecycle, tracking) with extensions `+Drawing`, `+Persistence` (map save, image load), `+Rendering` (instructions), `+Surfaces` (plane outlines); image/scan-guide helpers |
-| `sitescope/Views/` | `ManagementViews` (auth, projects, rooms, tasks, members, settings), `ARScreen`, drawing/scan overlays, transfer UI, tips |
+| `sitescope/Views/` | `ManagementViews` (sign-in, project list), `ProjectDetailView`, `HouseDetailView`, `RoomDetailView`, `AccessViews` (grants, responsible), `AdministrationView`, `SettingsView`, `TaskEditor`, `ARScreen`, drawing/scan overlays, tips |
 | `sitescope/Resources/` | `Info.plist`, `Config.xcconfig` (+ git-ignored `Secrets.xcconfig`) |
-| `supabase/` | Migrations, local seed, pgTAP access tests |
+| `supabase/` | CLI config only; the design is not a migration yet (T-029) |
 | `sitescopeTests/` | Portable core tests (`swift test`) |
-| `sitescopeAppTests/` | Store/backend fixtures, AR layout/render tests (simulator) |
+| `sitescopeAppTests/` | Store/backend fixtures, `InMemoryRepository` for tests without a server, AR layout/render tests (simulator) |
 | `sitescopeUITests/` | UI workflows |
 | `scripts/generate_project.py` | Regenerates the Xcode project deterministically |
 
 ## Data model
 
-`Project (id, owner_id, name)` → `Room (id, project_id, name, coordinate_id, map_path, surfaces, scan_guide_jpeg)` → `Annotation (room_id, coordinate_id, kind, pose, points/strokes/image, title, detail, status, priority)`.
-Annotation kinds created today: drawing (`line` with `strokes`), `area`, `image`. Legacy `marker/text/arrow` and room `marker/reference_points` still decode but are inactive.
-Cloud uses the access levels in DATABASE_API.md: the project responsible is the app's manager (full rights), an `external` grant is a worker (read + `set_task_status` RPC only). Row shapes live in `Services/CloudRecords.swift`, calls in `CloudRepository`.
+`Project` → `House` → `Room` as in DATABASE_API.md (names, `responsible_id`; rooms also dimensions, `area`, `status`). `Room` also carries the AR fields (`coordinate_id`, `map_path`, `surfaces`, `scan_guide_jpeg`); they have no columns yet, decode as defaults and are never sent (T-029). `Annotation (room_id, coordinate_id, kind, pose, points/strokes/image, title, detail, status, priority)` exists only in the app until T-029.
+Rights: each screen asks `scope_level` for the caller's level (0 none … 4 admin) and `AccessLevel` maps it to the permission table in DATABASE_API.md to show or hide controls. The database enforces the same rules.
 
 ## Persistence
 
-- **Local mode** (Debug build without backend config): `Application Support/sitescope/local.json` plus `assets/<project>/<room>/...` (world maps, PNG images). Writes are encoded off the main actor, serialized, atomic, and applied in memory only after success. Unreadable JSON → recovery screen that moves the file to a backup.
-- **Cloud mode**: tables via PostgREST, files in the private `room-assets` bucket at `<project>/<room>/...`. No offline cache or queue yet (T-008).
-- **Transfer file** (`.sitescope`): magic `sscope01` (8 bytes), UInt64 manifest length, JSON manifest, raw assets streamed in ≤ 1 MiB chunks with SHA-256. Limits: 16 MiB manifest, 256 MiB/asset, 1 GiB total, 256 rooms, 2,000 annotations, 100,000 points. Import validates everything, creates new IDs, keeps `coordinate_id` and poses, and rolls back on failure.
+- Everything lives on the server: tables via PostgREST, the session in the Keychain. No offline cache or queue yet (T-008), no file storage yet (T-029).
+- On-device mode and `.sitescope` file export/import were removed on 2026-11-27 (T-003). Old `local.json` files stay on phones but are no longer read.
 
 ## Spatial contract
 
 - Units: metres, ARKit right-handed gravity-aligned coordinates. `Pose` = column-major 4×4 rigid matrix (no scale/reflection/NaN).
 - Each room has an immutable `coordinate_id`. A scan saves an `ARWorldMap` containing an anchor `sitescope.room.<coordinate_id>` at the room origin (**do not rename** — saved maps depend on it).
 - Annotations store `roomFromAnnotation` + local vertices. Rendering: `sessionFromRoom × roomFromAnnotation`; placement uses `inverse(sessionFromRoom)`.
-- Published maps are immutable (enforced locally and by a DB trigger). Remapping = new room.
+- Published maps are immutable. Remapping = new room. The database trigger for this comes with T-029.
 - Recognition: notes are shown only after the room anchor is restored **and** tracking is normal for ≥ 2 s with mapping status mapped/extending. Tracking loss hides them. Never falls back to an arbitrary origin. 40 s timeout is a warning; search continues; explicit restart available.
 
 ## Scanning and drawing

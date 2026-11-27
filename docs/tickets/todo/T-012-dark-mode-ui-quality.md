@@ -20,6 +20,6 @@ Every screen is readable in both modes, accessible, and shows clear loading, emp
 
 ## Acceptance criteria
 
-- [ ] Layout tests in dark mode and large text; accessibility audit in the simulator is clean. Screenshot tour: `scripts/screenshots.sh <out-dir>` (light, dark, largest text, iPhone SE, Pro Max).
+- [ ] Layout tests in dark mode and large text; accessibility audit in the simulator is clean. The screenshot tour needed on-device data and was removed in T-003; a new one needs a test account.
 - [ ] Unit tests: error mapping and draft restore.
 - [ ] UI tests: an error state, unsupported AR screen. Done: appearance survives relaunch (`testAppearanceSettingAppliesAndSurvivesRelaunch`), delete waits for confirmation (`deleteProject` helper).
