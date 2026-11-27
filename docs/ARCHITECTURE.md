@@ -22,7 +22,7 @@ Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies.
 ## Data model
 
 `Project (id, owner_id, name)` → `Room (id, project_id, name, coordinate_id, map_path, surfaces, scan_guide_jpeg)` → `Annotation (room_id, coordinate_id, kind, pose, points/strokes/image, title, detail, status, priority)`.
-Annotation kinds created today: drawing (`line` with `strokes`), `area`, `image`. Legacy `marker/text/arrow` and room `marker/reference_points` still decode but are inactive.
+Annotation kinds created today: drawing (`line` with `strokes`), `area`, `image`. Legacy `marker/text/arrow` notes still decode and render but cannot be created; removing them waits for H-001 (T-027). The room fields `marker`, `reference_points` and `reference_notes` are gone; old files still open because unknown JSON keys are ignored.
 Cloud adds `memberships (project_id, user_id)`: owner = manager (full rights), member = worker (read + `set_task_status` RPC only).
 
 ## Persistence

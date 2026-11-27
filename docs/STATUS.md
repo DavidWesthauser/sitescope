@@ -1,13 +1,13 @@
 # Project status
 
-Snapshot: **2026-11-19**. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); ticket IDs to [tickets/](tickets/).
+Snapshot: **2026-11-27**. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); ticket IDs to [tickets/](tickets/).
 
 ## Summary
 
 - The app is a working **local-only** prototype: projects → rooms, camera-only ARKit scanning, drawing/area/image instructions, task status, AR room recognition via ARWorldMap, and offline file transfer (`.sitescope`, AirDrop/Files).
 - Build is green: `swift test` and the simulator test run pass. Everything is named `sitescope` (T-001).
 - `.gitignore` ignores `**/Secrets.xcconfig` and build artifacts; no secret was ever committed (history checked 2026-11-19, T-002).
-- Supabase client, auth, Keychain, 4 migrations, RLS and a 31-assertion pgTAP suite are **written but never deployed or run**. The cloud requirements (G2, G3, M1 server side, M4, M6) are therefore not met yet.
+- Supabase client, auth, Keychain, one migration, RLS and a 33-assertion pgTAP suite are written; the pgTAP suite passes on the local stack (2026-11-27), nothing is **deployed**. The cloud requirements (G2, G3, M1 server side, M4, M6) are therefore not met yet.
 - Missing entirely: houses level (M9), comments (M8), offline sync queue (M2), 3D viewer (M3 part 2), multi-role permissions (M5), language setting, LiDAR mode, 3D/video export, 2FA.
 - History was squashed into one `init` commit on 2026-11-05; regular small commits by both members from now on (P2, H-004).
 
@@ -52,19 +52,22 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 - **Backend client**: `sitescope/Services/Backend.swift` — Supabase REST/Auth/Storage via URLSession, Keychain session (`Vault`).
 - **AR**: `sitescope/AR/ARController*.swift` — scanning with readiness gates (4 headings × 3 positions), map save, recognition, freehand/area/image drawing on a locked view, bounded rendering.
 - **Pure logic**: `sitescope/Core/*` — models + validation, spatial math, scan coverage, tracking quality, transfer archive codec, render budgets.
-- **Backend schema**: `supabase/migrations/2026102*` — projects, memberships, rooms, annotations, RLS, RPCs `share_project`, `revoke_worker`, `set_task_status`, storage bucket `room-assets`.
+- **Backend schema**: `supabase/migrations/202610230001_sitescope.sql` (one file since T-027) — projects, memberships, rooms, annotations, RLS, RPCs `share_project`, `revoke_worker`, `set_task_status`, storage bucket `room-assets`.
 - **Tests**: `sitescopeTests` (core, portable), `sitescopeAppTests` (store/backend fixtures, AR layout), `sitescopeUITests/WorkflowTests.swift` (7 flows: import cancel, export sheet, auth validation, local project/room create, project rename relaunch, room rename/delete relaunch, cloud CRUD [skips without credentials]); `supabase/tests/access.test.sql`.
 
 ## Known issues
 
-- Legacy marker/reference-point fields and constraints remain in models and migration 001 (inactive; deleted in T-027).
+- Legacy `marker`/`text`/`arrow` notes still decode and render but cannot be created; removing them waits for H-001 (T-027).
+- Cloud mode does not delete storage files when rooms, projects or images go away (T-008); local mode does.
 - Release builds require backend config; Debug without config falls into local mode silently.
 - Force-quitting the app loses unsaved AR drafts.
 - Long-scan crash on iPhone 12 mini reported earlier; mitigations added, never confirmed on device (H-001).
 - The AR core is unproven on phones: accuracy, moved furniture and sharing between phones (H-001). A room map cannot be replaced, so a changed room means a new room without its notes (T-010).
-- Bugs found by reading the code, including files left behind after deletes, are listed in T-027.
+- Open in T-027: file splits, separating UI and logic in the project and room screens, AR extras pending H-002.
 
 ## Last verification
+
+- 2026-11-27, T-027 cleanup: lint clean; `swift test` 113 passed (88 core + 25 service); simulator unit/layout 135 passed; UI 8 run, 6 passed, 2 skipped (backend needed), screenshot tour 4 skipped (opt-in); `supabase test db` 33/33 (first run ever; 31/31 on the old schema). AR changes not tested on a phone.
 
 - 2026-11-19, renamed `sitescope` project (after T-001, T-002 and the T-014 formatting pass):
   - Lint: `swift format lint --strict --recursive` clean.
