@@ -8,6 +8,7 @@ import XCTest
 
 final class StubProtocol: URLProtocol {
     nonisolated(unsafe) static var handler: ((URLRequest) throws -> (Int, Data))?
+    nonisolated(unsafe) static var headers: [String: String] = [:]
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
@@ -15,7 +16,8 @@ final class StubProtocol: URLProtocol {
             let (code, data) = try Self.handler!(request)
             client?.urlProtocol(
                 self,
-                didReceive: HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: nil, headerFields: nil)!,
+                didReceive: HTTPURLResponse(
+                    url: request.url!, statusCode: code, httpVersion: nil, headerFields: Self.headers)!,
                 cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)
@@ -26,6 +28,7 @@ final class StubProtocol: URLProtocol {
 @MainActor final class BackendTests: XCTestCase {
     func backend(_ handler: @escaping (URLRequest) throws -> (Int, Data)) -> Backend {
         StubProtocol.handler = handler
+        StubProtocol.headers = [:]
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubProtocol.self]
         return Backend(
@@ -148,5 +151,33 @@ final class StubProtocol: URLProtocol {
         store.rooms = [room]
         try await store.renameRoom(store.rooms[0], name: "New name")
         XCTAssertEqual(store.rooms.map(\.name), ["New name"])
+    }
+    func testOversizedDownloadIsRefusedBeforeItsBodyIsRead() async throws {
+        let auth = try authData()
+        let backend = backend { request in
+            if request.url!.path.contains("/auth/") { return (200, auth) }
+            StubProtocol.headers = ["Content-Length": "\(Backend.maximumDownloadBytes + 1)"]
+            return (200, Data([1, 2, 3]))
+        }
+        _ = try await backend.authenticate(email: "fixture@example.test", password: "password", register: false)
+        do {
+            _ = try await backend.download(path: "project/room/map.worldmap")
+            XCTFail("The announced size is over the limit")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("100 MB")) }
+    }
+    func testDownloadReturnsTheFileAndReportsServerErrors() async throws {
+        let auth = try authData()
+        let backend = backend { request in
+            if request.url!.path.contains("/auth/") { return (200, auth) }
+            if request.url!.path.hasSuffix("missing") { return (404, Data("{\"message\":\"Not found\"}".utf8)) }
+            return (200, Data([1, 2, 3]))
+        }
+        _ = try await backend.authenticate(email: "fixture@example.test", password: "password", register: false)
+        let data = try await backend.download(path: "project/room/map.worldmap")
+        XCTAssertEqual(data, Data([1, 2, 3]))
+        do {
+            _ = try await backend.download(path: "project/room/missing")
+            XCTFail("Expected a server error")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("Not found")) }
     }
 }

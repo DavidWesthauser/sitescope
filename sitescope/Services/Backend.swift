@@ -48,10 +48,11 @@ struct Configuration {
         if persistSession { session = try? JSONDecoder().decode(AuthSession.self, from: Vault.read()) }
     }
     var user: User? { session?.user }
-    private func raw(
-        _ path: String, method: String = "GET", body: Data? = nil, token: String? = nil,
-        contentType: String = "application/json", prefer: String? = nil
-    ) async throws -> Data {
+    /// Largest room file the app downloads; a bigger one is refused before its body is read.
+    static let maximumDownloadBytes = 100_000_000
+    private func request(
+        _ path: String, method: String, body: Data?, token: String?, contentType: String, prefer: String?
+    ) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: config.url) else { throw AppError.message("Invalid server URL") }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -61,15 +62,26 @@ struct Configuration {
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.setValue(prefer, forHTTPHeaderField: "Prefer")
         request.timeoutInterval = 60
+        return request
+    }
+    /// The readable error for a response that is not 2xx, or nil when it succeeded.
+    private func failure(_ response: URLResponse, body data: Data) -> AppError? {
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard !(200...299).contains(code) else { return nil }
+        let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let message =
+            object?["msg"] as? String ?? object?["message"] as? String ?? object?["error_description"] as? String
+            ?? "Request failed"
+        return AppError.message("\(message) (\(code)). Refresh or sign in again if access expired.")
+    }
+    private func raw(
+        _ path: String, method: String = "GET", body: Data? = nil, token: String? = nil,
+        contentType: String = "application/json", prefer: String? = nil
+    ) async throws -> Data {
+        let request = try request(
+            path, method: method, body: body, token: token, contentType: contentType, prefer: prefer)
         let (data, response) = try await urlSession.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            let message =
-                object?["msg"] as? String ?? object?["message"] as? String ?? object?["error_description"] as? String
-                ?? "Request failed"
-            throw AppError.message("\(message) (\(code)). Refresh or sign in again if access expired.")
-        }
+        if let failure = failure(response, body: data) { throw failure }
         return data
     }
     func authenticate(email: String, password: String, register: Bool) async throws -> Bool {
@@ -150,10 +162,23 @@ struct Configuration {
         _ = try await raw(
             "/storage/v1/object/room-assets/\(path)", method: "POST", body: data, token: access, contentType: type)
     }
+    /// Streams the file and stops as soon as it is larger than `maximumDownloadBytes`: the announced length is
+    /// checked first, the received bytes while reading, so an oversized file is never held in memory.
     func download(path: String) async throws -> Data {
         let access = try await token()
-        let data = try await raw("/storage/v1/object/authenticated/room-assets/\(path)", token: access)
-        guard data.count <= 100_000_000 else { throw AppError.message("Room file exceeds the 100 MB safety limit.") }
+        let request = try request(
+            "/storage/v1/object/authenticated/room-assets/\(path)", method: "GET", body: nil, token: access,
+            contentType: "application/json", prefer: nil)
+        let (bytes, response) = try await urlSession.bytes(for: request)
+        let tooLarge = AppError.message("Room file exceeds the 100 MB safety limit.")
+        guard response.expectedContentLength <= Self.maximumDownloadBytes else { throw tooLarge }
+        var data = Data()
+        if response.expectedContentLength > 0 { data.reserveCapacity(Int(response.expectedContentLength)) }
+        for try await byte in bytes {
+            guard data.count < Self.maximumDownloadBytes else { throw tooLarge }
+            data.append(byte)
+        }
+        if let failure = failure(response, body: data) { throw failure }
         return data
     }
 }
