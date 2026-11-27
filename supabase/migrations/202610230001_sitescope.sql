@@ -15,32 +15,33 @@ create table public.rooms (
   name text not null check (length(trim(name)) between 1 and 120),
   spatial_version integer not null default 1 check (spatial_version = 1),
   coordinate_id uuid not null default gen_random_uuid(), map_path text,
-  marker jsonb,
-  reference_points jsonb not null default '[]'::jsonb,
-  reference_notes text not null default '',
+  -- Optional scene photo for people revisiting the room, not a localization target. 87384 = 64 KiB as base64.
+  scan_guide_jpeg text check (scan_guide_jpeg is null or length(scan_guide_jpeg) <= 87384),
+  -- Detected plane outlines shown in the scan miniature.
+  surfaces jsonb check (surfaces is null or (jsonb_typeof(surfaces) = 'array' and jsonb_array_length(surfaces) <= 128)),
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   unique(id,coordinate_id),
-  check (jsonb_typeof(reference_points) = 'array'),
-  check (map_path is null or (marker is not null and jsonb_array_length(reference_points) = 2 and length(trim(reference_notes)) > 0)),
   check (map_path is null or split_part(map_path,'/',1) = project_id::text),
-  check (map_path is null or split_part(map_path,'/',2) = id::text),
-  check (marker is null or (jsonb_typeof(marker) = 'object' and marker ?& array['id','image_path','width','height','room_from_marker'])),
-  check (marker is null or (marker->>'width')::numeric between 0.05 and 2),
-  check (marker is null or split_part(marker->>'image_path','/',1) = project_id::text),
-  check (marker is null or split_part(marker->>'image_path','/',2) = id::text)
+  check (map_path is null or split_part(map_path,'/',2) = id::text)
 );
 create table public.annotations (
   id uuid primary key default gen_random_uuid(), room_id uuid not null, coordinate_id uuid not null,
-  kind text not null check (kind in ('marker','text','area','line','arrow')),
+  kind text not null check (kind in ('area','line','image')),
   pose jsonb not null check (jsonb_typeof(pose) = 'array' and jsonb_array_length(pose) = 16),
   points jsonb not null default '[]'::jsonb check (jsonb_typeof(points) = 'array' and jsonb_array_length(points) <= 128),
   title text not null check (length(trim(title)) between 1 and 240), detail text not null default '',
   status text not null default 'todo' check (status in ('todo','in_progress','completed')),
   priority integer not null default 1 check (priority between 0 and 2),
+  -- Freehand drawings keep each finger stroke separately; images reference a file in the room-assets bucket.
+  strokes jsonb check (strokes is null or (kind = 'line' and jsonb_typeof(strokes) = 'array' and jsonb_array_length(strokes) between 1 and 32)),
+  image jsonb,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   foreign key(room_id,coordinate_id) references public.rooms(id,coordinate_id) on delete cascade,
   check (kind <> 'area' or jsonb_array_length(points) >= 3),
-  check (kind not in ('line','arrow') or jsonb_array_length(points) >= 2)
+  check (kind <> 'line' or jsonb_array_length(points) >= 2),
+  check (kind <> 'image' or (image is not null and jsonb_typeof(image) = 'object' and image ?& array['path','width','height']
+    and length(image->>'path') > 0 and (image->>'width')::numeric > 0.001 and (image->>'width')::numeric <= 5
+    and (image->>'height')::numeric > 0.001 and (image->>'height')::numeric <= 5))
 );
 create index on public.projects(owner_id);
 create index on public.memberships(user_id);
@@ -63,7 +64,7 @@ begin
  end if;
  if tg_table_name = 'rooms' then
    if new.project_id <> old.project_id or new.coordinate_id <> old.coordinate_id or new.spatial_version <> old.spatial_version then raise exception 'Room coordinate system is immutable'; end if;
-   if old.map_path is not null and (new.map_path is distinct from old.map_path or new.marker is distinct from old.marker or new.reference_points <> old.reference_points or new.reference_notes <> old.reference_notes) then raise exception 'Published spatial maps are immutable; create a new room for remapping'; end if;
+   if old.map_path is not null and (new.map_path is distinct from old.map_path or new.scan_guide_jpeg is distinct from old.scan_guide_jpeg or new.surfaces is distinct from old.surfaces) then raise exception 'Published spatial maps are immutable; create a new room for remapping'; end if;
  end if;
  if tg_table_name = 'annotations' then
    if new.room_id <> old.room_id or new.coordinate_id <> old.coordinate_id then raise exception 'Instruction cannot move between coordinate systems'; end if;
@@ -138,6 +139,6 @@ revoke all on function public.asset_project(text) from public,anon;
 grant execute on function public.asset_project(text) to authenticated;
 create policy room_asset_read on storage.objects for select to authenticated using(bucket_id = 'room-assets' and public.can_access(public.asset_project(name)));
 create policy room_asset_insert on storage.objects for insert to authenticated with check(bucket_id = 'room-assets' and public.manages(public.asset_project(name)));
--- Never permit overwrite: maps and marker image files are immutable, unique upload objects.
+-- No update policy, so uploads never overwrite: room maps and images are immutable objects with unique names.
 create policy room_asset_delete on storage.objects for delete to authenticated using(bucket_id = 'room-assets' and public.manages(public.asset_project(name)));
 commit;

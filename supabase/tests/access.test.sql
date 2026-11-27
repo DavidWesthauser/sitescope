@@ -2,7 +2,7 @@
 begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(33);
 set local role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
 select is((select count(*) from public.projects where id='20000000-0000-0000-0000-000000000001'),1::bigint,'Manager reads own project');
@@ -12,16 +12,17 @@ select is((select name from public.rooms where id='30000000-0000-0000-0000-00000
 select lives_ok($$delete from public.rooms where id='30000000-0000-0000-0000-000000000002'$$,'Manager deletes room');
 select is((select count(*) from public.rooms where id='30000000-0000-0000-0000-000000000002'),0::bigint,'Deleted room absent');
 -- Synthetic spatial metadata is used ONLY to exercise database permissions, never downloaded by the app.
-select lives_ok($$update public.rooms set map_path='20000000-0000-0000-0000-000000000001/30000000-0000-0000-0000-000000000001/test.worldmap',
- marker='{"id":"40000000-0000-0000-0000-000000000001","image_path":"20000000-0000-0000-0000-000000000001/30000000-0000-0000-0000-000000000001/test.png","width":0.2,"height":0.2,"room_from_marker":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}',
- reference_points='[{"x":0,"y":0,"z":0},{"x":1,"y":0,"z":0}]',reference_notes='Two corners'
+select lives_ok($$update public.rooms set map_path='20000000-0000-0000-0000-000000000001/30000000-0000-0000-0000-000000000001/test.worldmap'
  where id='30000000-0000-0000-0000-000000000001'$$,'Publish spatial metadata');
 select throws_ok($$update public.rooms set map_path=null where id='30000000-0000-0000-0000-000000000001'$$,'P0001','Published spatial maps are immutable; create a new room for remapping','Cannot silently change coordinate map');
-select lives_ok($$insert into public.annotations(id,room_id,coordinate_id,kind,pose,title)
- select '50000000-0000-0000-0000-000000000001',id,coordinate_id,'marker','[1,0,0,0,0,1,0,0,0,0,1,0,1,2,3,1]','Paint wall' from public.rooms where id='30000000-0000-0000-0000-000000000001'$$,'Manager creates task');
+select lives_ok($$insert into public.annotations(id,room_id,coordinate_id,kind,pose,points,title)
+ select '50000000-0000-0000-0000-000000000001',id,coordinate_id,'line','[1,0,0,0,0,1,0,0,0,0,1,0,1,2,3,1]','[{"x":0,"y":0,"z":0},{"x":0.5,"y":0,"z":0}]','Paint wall' from public.rooms where id='30000000-0000-0000-0000-000000000001'$$,'Manager creates task');
+select throws_ok($$insert into public.annotations(room_id,coordinate_id,kind,pose,title)
+ select id,coordinate_id,'text','[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]','Old text note' from public.rooms where id='30000000-0000-0000-0000-000000000001'$$,'23514',null,'Removed note kinds are rejected');
 select lives_ok($$insert into storage.objects(bucket_id,name) values('room-assets','20000000-0000-0000-0000-000000000001/30000000-0000-0000-0000-000000000001/test.worldmap')$$,'Manager uploads private asset metadata');
-select lives_ok($$insert into public.rooms(id,project_id,name,map_path,scan_guide_jpeg) values('30000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000001','Map without mandatory references','20000000-0000-0000-0000-000000000001/30000000-0000-0000-0000-000000000003/test.worldmap','/9gR/9k=')$$,'Room map can be saved without a marker or manual dots');
-select ok((select marker is null and reference_points='[]'::jsonb from public.rooms where id='30000000-0000-0000-0000-000000000003'),'Recovery references are optional');
+select lives_ok($$insert into public.rooms(id,project_id,name,map_path,scan_guide_jpeg) values('30000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000001','Mapped room','20000000-0000-0000-0000-000000000001/30000000-0000-0000-0000-000000000003/test.worldmap','/9gR/9k=')$$,'Room map saves with a viewpoint photo');
+select hasnt_column('public','rooms','marker','Printed marker column is gone');
+select hasnt_column('public','rooms','reference_points','Reference point column is gone');
 select is((select scan_guide_jpeg from public.rooms where id='30000000-0000-0000-0000-000000000003'),'/9gR/9k=','Viewpoint guide persists with the room');
 select throws_ok($$update public.rooms set scan_guide_jpeg=null where id='30000000-0000-0000-0000-000000000003'$$,'P0001','Published spatial maps are immutable; create a new room for remapping','Published viewpoint cannot silently change');
 select lives_ok($$insert into public.annotations(id,room_id,coordinate_id,kind,pose,title,image)

@@ -1,12 +1,11 @@
 # Backend setup (Supabase)
 
-Status: schema and policies exist but have **not been deployed or run yet** (T-003, H-003). New tables for houses, roles and comments will come as new timestamped migrations (`YYYYMMDDHHMM_name.sql`, run in filename order) (T-005, T-006, T-011). Keep this file in sync with `supabase/`.
+Status: schema and policies are **not deployed yet** (T-003, H-003). The pgTAP suite passes on the local stack (2026-11-27, T-027). New tables for houses, roles and comments will come as new timestamped migrations (`YYYYMMDDHHMM_name.sql`, run in filename order) (T-005, T-006, T-011). Keep this file in sync with `supabase/`.
 
 ## Hosted development project (dashboard, no CLI needed)
 
 1. [Supabase Dashboard](https://supabase.com/dashboard) → new project (EU region, e.g. Frankfurt).
-2. **SQL Editor**: run each file in `supabase/migrations/` once, in filename order:
-   `202610230001_sitescope.sql`, `202610230002_scan_and_draw.sql`, `202610230003_images_and_strokes.sql`, `202610270004_scan_guide.sql`. Stop and fix on any error.
+2. **SQL Editor**: run each file in `supabase/migrations/` once, in filename order (today only `202610230001_sitescope.sql`). Stop and fix on any error.
 3. Check **Table Editor**: `projects`, `memberships`, `rooms`, `annotations`. **Storage**: bucket `room-assets` exists and is **private**.
 4. **Authentication → Providers → Email**: enable email/password sign-up. For a test-only project you may disable *Confirm email*.
 5. **Connect** dialog: copy Project URL and **publishable** key (`sb_publishable_…`).
@@ -28,7 +27,7 @@ Never put a database password, secret key or service-role key into the app. Do n
 ```sh
 supabase start
 supabase db reset   # applies migrations + supabase/seed.sql
-supabase test db    # runs supabase/tests/access.test.sql (pgTAP, 31 assertions)
+supabase test db    # runs supabase/tests/access.test.sql (pgTAP, 33 assertions)
 ```
 
 Seed users (local only): `manager@sitescope.test`, `worker@sitescope.test`, `outsider@sitescope.test`, password `sitescope-local-2026!`, plus one unmapped fixture room. A real ARWorldMap cannot be seeded; maps come from scanning on a phone. A phone cannot reach `localhost` on the Mac; use the hosted project for device tests.
