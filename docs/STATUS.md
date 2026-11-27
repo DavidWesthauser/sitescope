@@ -26,11 +26,11 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 | M2 | Upload later after offline creation | ❌ | No queue; the app needs the network | T-008 |
 | M3 | AR view on site + 3D view elsewhere | 🟡 | AR walkthrough with ARWorldMap recognition implemented but not reachable until scans can be stored (T-029); physically unverified. No 3D model viewer | T-029, T-009, T-010, H-001 |
 | M4 | Accounts and their files on backend | 🟡 | Accounts and records on the hosted project; no file storage yet | T-029, H-003 |
-| M5 | Roles with read/write/delete rights | 🟡 | Levels admin / responsible / member / external from DATABASE_API.md, granted per project, house or room; screens show controls by level. Not reviewed by a human, no pgTAP in the repo | T-006, T-029 |
+| M5 | Roles with read/write/delete rights | 🟡 | Levels admin / responsible / member / external from DATABASE_API.md, granted per project, house or room; screens show controls by level, checked in the simulator for member, external and a single-room grant (2026-11-27). Admin screens unchecked (no admin), not reviewed by a human, no pgTAP in the repo | T-006, T-029 |
 | M6 | Login with username + password | 🟡 | Email/password sign-in required; sign-in, wrong-password error and sign-out checked in the simulator against the hosted project (2026-11-27). Login name decision open (H-002) | T-003 |
 | M7 | Dark mode | 🟡 | System colors plus asset-catalog `AccentColor`/`Warning` (light, dark, high contrast, ≥ 4.5:1); Appearance setting System/Light/Dark in Settings (UI test: survives relaunch). Fixed white/black only in AR overlays. Simulator screenshots 2026-11-26 readable in both modes; no app icon, no full audit of AR screens | T-012 |
 | M8 | Comments (image, audio, text) on project/house/room | ❌ | Not implemented | T-011 |
-| M9 | Project → House → Room | 🟡 | Create, rename, edit details and delete on all three levels, checked in the simulator against the hosted project (2026-11-27). Rights as member/external not yet checked in the UI | T-005 |
+| M9 | Project → House → Room | 🟡 | Create, rename, edit details and delete on all three levels, checked in the simulator against the hosted project (2026-11-27) | T-005 |
 | N1 | Language setting | ❌ | UI strings are English literals, no String Catalog | T-021 |
 | N2 | LiDAR 3D models | ❌ | Camera-only plane detection; no RoomPlan/scene reconstruction | T-021 |
 | N3 | Export 3D file / video | ❌ | Not implemented (the project transfer file was removed) | T-021 |
@@ -71,5 +71,6 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
   - Lint clean; `swift test`: 83 passed. App and test targets compile for the simulator without warnings (`build-for-testing`); simulator tests were not run.
   - The app's requests checked against a local copy of the design: create project, house, room; room details; `scope_level` 3 (responsible) and 2 (member); member cannot delete rooms or create houses; outsider sees nothing; only admins hand over projects; nobody changes their own active flag.
   - Simulator (iPhone 18 Pro), hosted project, test account as responsible: sign-in screen and errors; create/rename project, house, room; room size and status save on Done/leave with area 14 m² from the database; grant External to a second account and revoke; unknown email gives "No active account with this email."; responsible shown as text on the project, picker on the house; settings; delete room, house, project; sign out. All test data deleted.
-  - Not checked in the UI: what a member or external sees (needs a second test account), administration (no admin yet).
+  - Simulator, two accounts (owner and Leonard's): as member, project and house show no edit/delete/access controls, rooms can be added and edited; a room the member creates makes them its responsible; as external everything is read-only; a grant on one room shows only that room and its house. All test data deleted.
+  - Not checked in the UI: administration (no admin yet).
 - Physical device: last install was commit `88d4de7` (pre-squash, not in this repo) on iPhone 12 mini (2026-10-23); latest AR changes not tested on hardware.
