@@ -41,7 +41,12 @@ final class StubProtocol: URLProtocol {
     func testLoginAndAuthorizedProjectLoad() async throws {
         let auth = try authData()
         let project = Project(owner_id: UUID(), name: "Shared apartment")
-        let data = try JSONEncoder().encode([project])
+        // A real `projects` row: the responsible person is the app's owner; extra columns are ignored.
+        let data = Data(
+            """
+            [{"id":"\(project.id)","name":"Shared apartment","responsible_id":"\(project.owner_id)",
+              "created_by":null,"created_by_org":null,"created_at":"2026-11-27T12:00:00Z"}]
+            """.utf8)
         let backend = backend { request in
             if request.url!.path.contains("/auth/") { return (200, auth) }
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer fixture-access")
@@ -121,5 +126,51 @@ final class StubProtocol: URLProtocol {
         }
         _ = try await backend.authenticate(email: "fixture@example.test", password: "password", register: false)
         try await backend.rpc("set_task_status", arguments: ["task": task.uuidString, "new_status": "completed"])
+    }
+    /// A room is created in the project's house and carries only columns clients may set.
+    func testCreatingCloudRoomUsesTheProjectHouse() async throws {
+        let auth = try authData()
+        let house = UUID()
+        let project = Project(owner_id: UUID(), name: "Site")
+        var sentRoom: [String: Any]?
+        let backend = backend { request in
+            if request.url!.path.contains("/auth/") { return (200, auth) }
+            if request.url!.path == "/rest/v1/houses" {
+                return (
+                    200,
+                    Data("[{\"id\":\"\(house)\",\"project_id\":\"\(project.id)\",\"name\":\"Main building\"}]".utf8)
+                )
+            }
+            if request.url!.path == "/rest/v1/rooms", request.httpMethod == "POST" {
+                sentRoom = try JSONSerialization.jsonObject(with: request.bodyStreamData()) as? [String: Any]
+                return (201, Data())
+            }
+            return (200, Data("[]".utf8))
+        }
+        _ = try await backend.authenticate(email: "fixture@example.test", password: "password", register: false)
+        try await Store(backend: backend).createRoom(in: project, name: "Kitchen")
+        let room = try XCTUnwrap(sentRoom)
+        XCTAssertEqual(room["house_id"] as? String, house.uuidString)
+        XCTAssertEqual(room["project_id"] as? String, project.id.uuidString)
+        XCTAssertNil(room["created_by"])
+    }
+
+}
+
+extension URLRequest {
+    /// URLProtocol hands over the body as a stream, not `httpBody`.
+    func bodyStreamData() -> Data {
+        if let httpBody { return httpBody }
+        guard let stream = httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            data.append(buffer, count: count)
+        }
+        return data
     }
 }

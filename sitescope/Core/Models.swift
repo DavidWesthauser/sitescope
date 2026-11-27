@@ -194,9 +194,14 @@ public enum DisplayName {
         return text.isEmpty || text.count > maximumLength ? nil : text
     }
 }
-/// A worker's access to a cloud project (`memberships` table).
+/// A person's access to a whole cloud project (`access_grants` row with the person's profile name).
+/// The app's "worker" has the role `external`.
 public struct Membership: Codable, Identifiable, Equatable, Sendable {
-    public let project_id: UUID
+    public struct Person: Codable, Equatable, Sendable {
+        public let display_name: String
+    }
+    public let id: UUID
     public let user_id: UUID
-    public var id: UUID { user_id }
+    public let role: String
+    public let user: Person?
 }

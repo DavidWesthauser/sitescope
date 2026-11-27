@@ -102,9 +102,11 @@ struct Configuration {
         if persistSession { Vault.delete() }
         session = nil
     }
-    func list<T: Decodable>(_ table: String, query: String = "") async throws -> [T] {
+    /// `select` is a PostgREST column list and may embed related rows, e.g. `*,user:profiles!user_id(display_name)`.
+    func list<T: Decodable>(_ table: String, select: String = "*", query: String = "") async throws -> [T] {
         let access = try await token()
-        return try JSONDecoder().decode([T].self, from: await raw("/rest/v1/\(table)?select=*\(query)", token: access))
+        return try JSONDecoder().decode(
+            [T].self, from: await raw("/rest/v1/\(table)?select=\(select)\(query)", token: access))
     }
     func insert<T: Encodable>(_ table: String, value: T) async throws {
         let access = try await token()

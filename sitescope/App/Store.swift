@@ -20,26 +20,37 @@ import SwiftUI
     private var sharing: ProjectSharing?
     private var transfer: ProjectTransferService?
 
+    /// Remembers that the user chose to work without an account, so the next launch opens their local projects.
+    static let usesDeviceStorageKey = "sitescope.usesDeviceStorage"
     init() {
         do {
-            connect(Backend(config: try .load()))
+            let backend = Backend(config: try .load())
+            connect(backend)
+            if !signedIn && UserDefaults.standard.bool(forKey: Self.usesDeviceStorageKey) {
+                openLocal(at: Self.defaultLocalURL)
+            }
         } catch {
             #if DEBUG && os(iOS)
-                /// UI tests pass a per-run folder name so each test starts with its own empty local store.
-                let folder = ProcessInfo.processInfo.environment["SITESCOPE_LOCAL_DATA_DIR"]
-                var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                    .appendingPathComponent("sitescope")
-                if let folder {
-                    directory =
-                        folder.hasPrefix("/")
-                        ? URL(fileURLWithPath: folder)
-                        : FileManager.default.temporaryDirectory.appendingPathComponent(folder)
-                }
-                openLocal(at: directory.appendingPathComponent("local.json"))
+                openLocal(at: Self.defaultLocalURL)
             #else
                 self.error = error.localizedDescription
             #endif
         }
+    }
+    /// `sitescope/local.json` in Application Support. UI tests pass a per-run folder name in Debug builds,
+    /// so each test starts with its own empty local store.
+    private static var defaultLocalURL: URL {
+        var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("sitescope")
+        #if DEBUG
+            if let folder = ProcessInfo.processInfo.environment["SITESCOPE_LOCAL_DATA_DIR"] {
+                directory =
+                    folder.hasPrefix("/")
+                    ? URL(fileURLWithPath: folder)
+                    : FileManager.default.temporaryDirectory.appendingPathComponent(folder)
+            }
+        #endif
+        return directory.appendingPathComponent("local.json")
     }
     /// Explicit local storage entry point; never changes cloud authentication or Keychain.
     init(localURL: URL) {
@@ -122,6 +133,21 @@ import SwiftUI
         annotations = []
         members = []
         signedIn = false
+    }
+
+    /// Opens the projects saved on this iPhone while an account backend is configured. They are never uploaded.
+    func useWithoutAccount() {
+        UserDefaults.standard.set(true, forKey: Self.usesDeviceStorageKey)
+        openLocal(at: Self.defaultLocalURL)
+    }
+    /// Leaves on-device mode for the sign-in screen. Local files stay on disk and open again with `useWithoutAccount`.
+    func showSignIn() {
+        guard let backend else { return }
+        UserDefaults.standard.set(false, forKey: Self.usesDeviceStorageKey)
+        transfer = nil
+        isLocalMode = false
+        show(LocalData())
+        connect(backend)
     }
 
     // MARK: Projects, rooms, tasks

@@ -29,6 +29,12 @@ struct AuthenticationView: View {
                     if !notice.isEmpty { Text(notice) }
                 }
                 Section {
+                    Button("Use Without an Account") { store.useWithoutAccount() }
+                        .disabled(store.busy).accessibilityIdentifier("auth.local")
+                } footer: {
+                    Text("Projects stay on this iPhone. You can share them as a file or sign in later.")
+                }
+                Section {
                     Text(
                         "Camera access is requested only when opening AR. sitescope supports camera-only world tracking; LiDAR is optional."
                     ).font(.footnote)
@@ -152,26 +158,26 @@ struct MembersView: View {
     var body: some View {
         List(store.members) { member in
             VStack(alignment: .leading) {
-                Text(member.user_id.uuidString).font(.caption).textSelection(.enabled)
+                Text(member.user?.display_name ?? "Unknown person")
                 Button("Revoke Access", role: .destructive) { revoking = member }
             }
         }.navigationTitle("Workers").task {
             do { try await store.loadMembers(of: project) } catch { store.error = error.localizedDescription }
         }
-            .confirmationDialog(
-                "Revoke this worker’s access?",
-                isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }),
-                titleVisibility: .visible, presenting: revoking
-            ) { member in
-                Button("Revoke Access", role: .destructive) {
-                    store.run {
-                        try await store.revokeMember(member, from: project)
-                    }
+        .confirmationDialog(
+            "Revoke access for \(revoking?.user?.display_name ?? "this worker")?",
+            isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }),
+            titleVisibility: .visible, presenting: revoking
+        ) { member in
+            Button("Revoke Access", role: .destructive) {
+                store.run {
+                    try await store.revokeMember(member, from: project)
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: { _ in
-                Text("They can no longer open \(project.name). You can share the project with them again later.")
             }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("They can no longer open \(project.name). You can share the project with them again later.")
+        }
     }
 }
 /// Edits one spatial instruction. Managers can change its content; everyone can update its status.

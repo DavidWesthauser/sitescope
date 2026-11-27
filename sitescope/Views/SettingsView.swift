@@ -16,11 +16,17 @@ struct SettingsView: View {
             if store.isLocalMode {
                 Section {
                     Text("No account connected")
+                    if store.hasBackend {
+                        Button("Sign In or Create Account") { store.showSignIn() }
+                            .accessibilityIdentifier("settings.signIn")
+                    }
                 } header: {
                     Text("On this device")
                 } footer: {
                     Text(
-                        "Your projects, room maps and instructions are saved on this device. Sharing becomes available when cloud accounts are connected."
+                        !store.hasBackend
+                            ? "Your projects, room maps and instructions are saved on this device."
+                            : "Your projects, room maps and instructions are saved on this device and stay here when you sign in. Projects in your account are shared with the people you invite."
                     )
                 }
             } else {
