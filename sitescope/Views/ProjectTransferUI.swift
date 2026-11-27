@@ -60,7 +60,7 @@ struct ProjectFileShareButton: View {
 }
 
 /// Present the activity controller natively so its close action owns dismissal.
-private struct ProjectActivityPresenter: UIViewControllerRepresentable {
+struct ProjectActivityPresenter: UIViewControllerRepresentable {
     let url: URL?
     let onFinish: @MainActor () -> Void
 
@@ -69,6 +69,12 @@ private struct ProjectActivityPresenter: UIViewControllerRepresentable {
         controller.requestedURL = url
         controller.onFinish = onFinish
         controller.presentIfReady()
+    }
+    /// The share sheet can be torn down without calling back (for example when its list row is removed). Finishing
+    /// here resets the button, which otherwise stayed disabled.
+    static func dismantleUIViewController(_ controller: Presenter, coordinator: ()) {
+        controller.presentedViewController?.dismiss(animated: false)
+        controller.finish()
     }
 
     @MainActor final class Presenter: UIViewController, UIPopoverPresentationControllerDelegate {
@@ -99,8 +105,9 @@ private struct ProjectActivityPresenter: UIViewControllerRepresentable {
         func popoverPresentationControllerDidDismissPopover(
             _ popoverPresentationController: UIPopoverPresentationController
         ) { finish() }
-        private func finish() {
-            guard activeURL != nil else { return }
+        /// Ends a requested or shown share sheet once; later calls do nothing.
+        func finish() {
+            guard activeURL != nil || requestedURL != nil else { return }
             requestedURL = nil
             // Keep the presentation guard until SwiftUI has consumed completion.
             onFinish?()
