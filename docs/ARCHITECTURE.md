@@ -27,7 +27,7 @@ Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies.
 
 `Project (id, owner_id, name)` → `Room (id, project_id, name, coordinate_id, map_path, surfaces, scan_guide_jpeg)` → `Annotation (room_id, coordinate_id, kind, pose, points/strokes/image, title, detail, status, priority)`.
 Annotation kinds created today: drawing (`line` with `strokes`), `area`, `image`. Legacy `marker/text/arrow` and room `marker/reference_points` still decode but are inactive.
-Cloud adds `memberships (project_id, user_id)`: owner = manager (full rights), member = worker (read + `set_task_status` RPC only).
+Cloud uses the access levels in DATABASE_API.md: the project responsible is the app's manager (full rights), an `external` grant is a worker (read + `set_task_status` RPC only). Row shapes live in `Services/CloudRecords.swift`, calls in `CloudRepository`.
 
 ## Persistence
 

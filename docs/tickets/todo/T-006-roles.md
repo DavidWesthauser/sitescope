@@ -9,7 +9,7 @@ Each member has a role that decides what they may do, enforced on the server. A 
 
 ## Tasks
 
-- [ ] Migration: `memberships.role`, policies for all tables and storage, RPCs to share, change role and remove.
+- [ ] App: show and grant `member`/`external` at project, house and room scope (`grant_access`, `scope_level`); the schema already has the levels (T-003).
 - [ ] Swift `ProjectRole` replaces the `manager` flag; changes the server rejects show a clear message.
 - [ ] Team section: members by email, invite, change role, remove.
 
