@@ -113,6 +113,14 @@ final class ProjectTransferArchiveTests: XCTestCase {
         return file
     }
 
+    func testExportFileIsNamedAfterTheProject() {
+        XCTAssertEqual(ProjectTransferArchive.fileName(forProject: "Riverside Office"), "Riverside Office.sitescope")
+        XCTAssertEqual(ProjectTransferArchive.fileName(forProject: "Büro 2/3: Küche"), "Büro 2 3 Küche.sitescope")
+        XCTAssertEqual(ProjectTransferArchive.fileName(forProject: "..hidden\nname"), "hidden name.sitescope")
+        XCTAssertEqual(ProjectTransferArchive.fileName(forProject: " / "), "sitescope project.sitescope")
+        XCTAssertEqual(ProjectTransferArchive.fileName(forProject: String(repeating: "a", count: 120)).count, 90)
+    }
+
     func testCorruptTruncatedAndTrailingBytesRollBack() throws {
         let (project, room, task, _) = try fixture()
         let archive = root.appendingPathComponent("project.sitescope")

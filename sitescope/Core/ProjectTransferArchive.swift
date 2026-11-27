@@ -60,6 +60,17 @@ public enum ProjectTransferArchive {
     private static let totalLimit: UInt64 = 1024 * 1_048_576
     private static var fm: FileManager { .default }
 
+    /// The export file name: the project name without characters file systems or AirDrop reject, at most 80
+    /// characters, ending in `.sitescope`. An empty result falls back to "sitescope project".
+    public static func fileName(forProject name: String) -> String {
+        let forbidden = CharacterSet(charactersIn: "/\\:*?\"<>|").union(.controlCharacters).union(.newlines)
+        let cleaned = String(String.UnicodeScalarView(name.unicodeScalars.map { forbidden.contains($0) ? " " : $0 }))
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        // A leading dot would hide the file.
+        let visible = String(cleaned.drop(while: { $0 == "." }).prefix(80)).trimmingCharacters(in: .whitespaces)
+        return (visible.isEmpty ? "sitescope project" : visible) + ".sitescope"
+    }
+
     /// Writes into a hidden temporary file and moves it into place, so a failed export never leaves
     /// a partial archive at `destination`.
     public static func write(

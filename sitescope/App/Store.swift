@@ -434,7 +434,7 @@ extension Store {
         let assetRoot = localURL.deletingLastPathComponent().appendingPathComponent("assets", isDirectory: true)
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent(
             "sitescope-Export-\(UUID().uuidString)", isDirectory: true)
-        let file = destination.appendingPathComponent("sitescope-\(saved.id.uuidString.prefix(8)).sitescope")
+        let file = destination.appendingPathComponent(ProjectTransferArchive.fileName(forProject: saved.name))
         return try await Task.detached(priority: .userInitiated) {
             do {
                 try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
