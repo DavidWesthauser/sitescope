@@ -10,7 +10,7 @@ final class WorkflowTests: XCTestCase {
         return app
     }
 
-    /// Signed out, the app shows only the sign-in screen, and sign-in needs an email and 8 characters.
+    /// Signed out, the app shows only the sign-in screen, and sign-in needs an email and 6 characters.
     func testAppRequiresSignIn() throws {
         let app = makeApp()
         app.launch()
@@ -22,8 +22,8 @@ final class WorkflowTests: XCTestCase {
         app.textFields["auth.email"].tap()
         app.textFields["auth.email"].typeText("someone@example.test")
         app.secureTextFields["auth.password"].tap()
-        app.secureTextFields["auth.password"].typeText("short")
-        XCTAssertFalse(app.buttons["auth.submit"].isEnabled, "Passwords under 8 characters are rejected")
+        app.secureTextFields["auth.password"].typeText("short")  // 5 characters.
+        XCTAssertFalse(app.buttons["auth.submit"].isEnabled, "Passwords under 6 characters are rejected")
     }
 
     /// Requires a configured backend and sitescope_TEST_EMAIL/PASSWORD in the test process environment.

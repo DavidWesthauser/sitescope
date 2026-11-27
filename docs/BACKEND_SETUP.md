@@ -19,7 +19,7 @@ Database design, rights and API: [DATABASE_API.md](DATABASE_API.md). The app nee
    SUPABASE_ANON_KEY = sb_publishable_REPLACE_ME
    ```
    Keep `https:/$()/` exactly: in xcconfig `//` starts a comment. No quotes.
-3. Build. The app opens on the sign-in screen; register or sign in (passwords need at least 8 characters in the app).
+3. Build. The app opens on the sign-in screen; register or sign in (passwords need at least 6 characters, Supabase's default).
 
 ## Local stack (CLI + Docker)
 

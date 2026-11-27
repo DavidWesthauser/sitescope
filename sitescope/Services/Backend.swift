@@ -61,10 +61,14 @@ struct Configuration {
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            // The server's own text is readable; the status code only helps when there is none.
             let message =
                 object?["msg"] as? String ?? object?["message"] as? String ?? object?["error_description"] as? String
-                ?? "Request failed"
-            throw AppError.message("\(message) (\(code)). Refresh or sign in again if access expired.")
+                ?? "The request failed (\(code))"
+            // Only an expired session or missing rights is helped by refreshing; a wrong password is not.
+            let hint = [401, 403].contains(code) ? " Refresh or sign in again if access expired." : ""
+            let sentence = message.hasSuffix(".") ? message : message + "."
+            throw AppError.message(sentence + hint)
         }
         return data
     }

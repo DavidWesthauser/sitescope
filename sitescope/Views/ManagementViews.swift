@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Sign-in and registration. The app shows nothing else until someone is signed in.
 struct AuthenticationView: View {
+    /// Supabase's default minimum; the server checks it again on sign-up.
+    static let minimumPasswordLength = 6
     @EnvironmentObject var store: Store
     @State private var email = ""
     @State private var password = ""
@@ -15,7 +17,7 @@ struct AuthenticationView: View {
                     TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier(
                             "auth.email")
-                    SecureField("Password (at least 8 characters)", text: $password).textContentType(
+                    SecureField("Password (at least 6 characters)", text: $password).textContentType(
                         register ? .newPassword : .password
                     ).accessibilityIdentifier("auth.password")
                     Button(register ? "Register" : "Sign In") {
@@ -23,8 +25,10 @@ struct AuthenticationView: View {
                             let active = try await store.signIn(email: email, password: password, register: register)
                             if !active { notice = "Check your email to confirm your account, then sign in." }
                         }
-                    }.disabled(email.isEmpty || password.count < 8 || store.busy || !store.hasBackend)
-                        .accessibilityIdentifier("auth.submit")
+                    }.disabled(
+                        email.isEmpty || password.count < Self.minimumPasswordLength || store.busy || !store.hasBackend
+                    )
+                    .accessibilityIdentifier("auth.submit")
                     Toggle("I need an account", isOn: $register)
                     if !notice.isEmpty { Text(notice) }
                 } header: {

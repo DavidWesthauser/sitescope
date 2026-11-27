@@ -26,7 +26,10 @@ struct SettingsView: View {
             } header: {
                 Text("Account")
             } footer: {
-                Text(store.isAdmin ? "You are an administrator." : "Others see your name on projects you are part of.")
+                Text(
+                    store.isAdmin
+                        ? "You sign in with this email. You are an administrator."
+                        : "You sign in with this email. Others see your name above on projects you are part of.")
             }
             Section {
                 Picker("Appearance", selection: $appearance) {

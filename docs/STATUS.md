@@ -27,10 +27,10 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 | M3 | AR view on site + 3D view elsewhere | 🟡 | AR walkthrough with ARWorldMap recognition implemented but not reachable until scans can be stored (T-029); physically unverified. No 3D model viewer | T-029, T-009, T-010, H-001 |
 | M4 | Accounts and their files on backend | 🟡 | Accounts and records on the hosted project; no file storage yet | T-029, H-003 |
 | M5 | Roles with read/write/delete rights | 🟡 | Levels admin / responsible / member / external from DATABASE_API.md, granted per project, house or room; screens show controls by level. Not reviewed by a human, no pgTAP in the repo | T-006, T-029 |
-| M6 | Login with username + password | 🟡 | Email/password sign-in required; the hosted Auth accepted the test account through the API. Not yet signed in from the app; login name decision open (H-002) | T-003 |
+| M6 | Login with username + password | 🟡 | Email/password sign-in required; sign-in, wrong-password error and sign-out checked in the simulator against the hosted project (2026-11-27). Login name decision open (H-002) | T-003 |
 | M7 | Dark mode | 🟡 | System colors plus asset-catalog `AccentColor`/`Warning` (light, dark, high contrast, ≥ 4.5:1); Appearance setting System/Light/Dark in Settings (UI test: survives relaunch). Fixed white/black only in AR overlays. Simulator screenshots 2026-11-26 readable in both modes; no app icon, no full audit of AR screens | T-012 |
 | M8 | Comments (image, audio, text) on project/house/room | ❌ | Not implemented | T-011 |
-| M9 | Project → House → Room | 🟡 | Screens for all three levels against the hosted design; not yet run in the simulator | T-005 |
+| M9 | Project → House → Room | 🟡 | Create, rename, edit details and delete on all three levels, checked in the simulator against the hosted project (2026-11-27). Rights as member/external not yet checked in the UI | T-005 |
 | N1 | Language setting | ❌ | UI strings are English literals, no String Catalog | T-021 |
 | N2 | LiDAR 3D models | ❌ | Camera-only plane detection; no RoomPlan/scene reconstruction | T-021 |
 | N3 | Export 3D file / video | ❌ | Not implemented (the project transfer file was removed) | T-021 |
@@ -40,7 +40,7 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 | G3 | Accounts + server-side protection | 🟡 | RLS, guards and column privileges of the design run on the hosted project; checked by hand against the API on a local copy (2026-11-27). No pgTAP in the repo, not reviewed by a human | T-003, T-006, T-029 |
 | G4 | Native device feature | 🟡 | Camera + ARKit in the core workflow; permission request and denial message. Not verified on a phone since the latest changes. PhotosPicker for images | H-001 |
 | G5 | Error handling / lifecycle | 🟡 | Validation, server errors as readable messages, AR interruption handling. Network/offline errors and permission flows for new features open | T-012 |
-| G6 | Automated tests | 🟡 | `swift test`: 83 pass (2026-11-27). Simulator unit/layout and the 2 UI flows compile but were not run after T-003 | T-015 |
+| G6 | Automated tests | 🟡 | `swift test`: 83 pass (2026-11-27). Manual simulator walkthroughs against the hosted project pass; simulator unit/layout tests and the 2 UI flows compile but were not run after T-003 | T-015 |
 | G7 | Architecture / code quality | 🟡 | Folders App/Core/AR/Services/Views. Code is formatted with `swift-format` (`.swift-format`, see `docs/CONVENTIONS.md`) and lint-clean. `Store` is a view model only; cloud calls live in `Services/`. Compiles without warnings (2026-11-27) | T-008, T-027 |
 | — | Reproducible backend + seed data | ❌ | The design exists only on the hosted project; migration, seed and examiner accounts missing | T-029, T-015, H-007 |
 | P2 | Regular commits by both members | 🟡 | History squashed into one `init` commit on 2026-11-05; work since then goes through branches and PRs. Both members still need regular commits | H-004 |
@@ -70,5 +70,6 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 - 2026-11-27 (T-003, branch `T-003-cloud-accounts`):
   - Lint clean; `swift test`: 83 passed. App and test targets compile for the simulator without warnings (`build-for-testing`); simulator tests were not run.
   - The app's requests checked against a local copy of the design: create project, house, room; room details; `scope_level` 3 (responsible) and 2 (member); member cannot delete rooms or create houses; outsider sees nothing; only admins hand over projects; nobody changes their own active flag.
-  - Hosted project: sign-in with the test account works through the API.
+  - Simulator (iPhone 18 Pro), hosted project, test account as responsible: sign-in screen and errors; create/rename project, house, room; room size and status save on Done/leave with area 14 m² from the database; grant External to a second account and revoke; unknown email gives "No active account with this email."; responsible shown as text on the project, picker on the house; settings; delete room, house, project; sign out. All test data deleted.
+  - Not checked in the UI: what a member or external sees (needs a second test account), administration (no admin yet).
 - Physical device: last install was commit `88d4de7` (pre-squash, not in this repo) on iPhone 12 mini (2026-10-23); latest AR changes not tested on hardware.

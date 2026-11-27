@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Room screen: name, dimensions and building status, who is responsible, access and, in its own last section,
-/// deleting. Members (level ≥ 2) edit the details; deleting and access need level 3; handing the room over needs
-/// level 3 on its house.
+/// deleting. Members (level ≥ 2) edit the details, which save like the name: when editing ends or the status
+/// changes. Deleting and access need level 3; handing the room over needs level 3 on its house.
 struct RoomDetail: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +20,8 @@ struct RoomDetail: View {
     @State private var deleting = false
     /// Set once the delete succeeded, so the name field's save on disappear does not touch the deleted room.
     @State private var deleted = false
+    /// The decimal keypad has no Return key: Done above it ends editing, and ending editing saves.
+    @FocusState private var editingDimension: Bool
     private var current: Room { room ?? initialRoom }
     private var scope: AccessScope { .room(project, house, current) }
 
@@ -82,14 +84,27 @@ struct RoomDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await refresh() }
         .refreshable { await refresh() }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                if editingDimension {
+                    Spacer()
+                    Button("Done") { editingDimension = false }.accessibilityIdentifier("room.dimensions.done")
+                }
+            }
+        }
+        .onChange(of: editingDimension) { _, editing in
+            if !editing { saveDetails() }
+        }
+        .onChange(of: status) { _, _ in saveDetails() }
+        .onDisappear(perform: saveDetails)
     }
 
     @ViewBuilder private var detailsSection: some View {
         Section {
             if level.canContribute {
-                DimensionField(title: "Length", text: $length)
-                DimensionField(title: "Width", text: $width)
-                DimensionField(title: "Height", text: $height)
+                DimensionField(title: "Length", text: $length, focus: $editingDimension)
+                DimensionField(title: "Width", text: $width, focus: $editingDimension)
+                DimensionField(title: "Height", text: $height, focus: $editingDimension)
                 Picker("Status", selection: $status) {
                     ForEach(RoomStatus.allCases) { Text($0.label).tag($0) }
                 }.accessibilityIdentifier("room.status")
@@ -99,24 +114,29 @@ struct RoomDetail: View {
                 LabeledContent("Height", value: Self.metres(current.height))
                 LabeledContent("Status", value: current.status.label)
             }
-            LabeledContent("Area", value: current.area.map { "\(Self.number($0)) m²" } ?? "–")
-            if level.canContribute {
-                Button("Save Details") { saveDetails() }
-                    .disabled(!detailsChanged || parsedDetails == nil || store.busy)
-                    .accessibilityIdentifier("room.saveDetails")
-            }
+            LabeledContent("Area", value: area.map { "\(Self.number($0)) m²" } ?? "–")
+                .accessibilityIdentifier("room.area")
         } header: {
             Text("Details")
         } footer: {
             if level.canContribute {
-                Text(
-                    parsedDetails == nil
-                        ? "Use positive numbers in metres, e.g. 4.25."
-                        : "Metres. Leave empty if unknown. The area is calculated from length and width.")
+                if parsedDetails == nil {
+                    Text(
+                        "Use positive numbers in metres, e.g. \(Self.number(4.25)). Nothing is saved until all of them are valid."
+                    ).foregroundStyle(Color("Warning"))
+                } else {
+                    Text("Metres, saved when you tap Done. Leave empty if unknown. The area is length × width.")
+                }
             }
         }
     }
 
+    /// While editing, the area of what is typed; the database computes the stored one.
+    private var area: Double? {
+        guard level.canContribute, let parsed = parsedDetails else { return current.area }
+        guard let length = parsed.length, let width = parsed.width else { return nil }
+        return length * width
+    }
     /// The typed dimensions as numbers; nil while one of them is not a positive number.
     private var parsedDetails: (height: Double?, length: Double?, width: Double?)? {
         guard let h = Self.parse(height), let l = Self.parse(length), let w = Self.parse(width) else { return nil }
@@ -146,8 +166,9 @@ struct RoomDetail: View {
         status = room.status
     }
 
+    /// Saves only valid, changed details, never for a deleted room or someone who may not edit.
     private func saveDetails() {
-        guard let parsed = parsedDetails else { return }
+        guard level.canContribute, !deleted, detailsChanged, let parsed = parsedDetails else { return }
         var updated = current
         updated.height = parsed.height
         updated.length = parsed.length
@@ -196,10 +217,12 @@ struct RoomDetail: View {
 private struct DimensionField: View {
     let title: String
     @Binding var text: String
+    var focus: FocusState<Bool>.Binding
     var body: some View {
         LabeledContent(title) {
             HStack(spacing: 4) {
                 TextField("–", text: $text).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    .focused(focus)
                     .accessibilityLabel("\(title) in metres")
                 Text("m").foregroundStyle(.secondary).accessibilityHidden(true)
             }
