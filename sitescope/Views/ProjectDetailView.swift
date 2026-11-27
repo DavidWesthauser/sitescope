@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// Project screen: name, rooms, sharing and, kept apart in the last section, deleting the project.
+/// Project screen: name, houses, who is responsible, access and, kept apart in the last section, deleting.
+/// Controls follow the caller's level on the project (docs/DATABASE_API.md, "Permissions").
 struct ProjectDetail: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
     let project: Project
+    @State private var level = AccessLevel.none
     @State private var nameDraft: String
-    @State private var roomName = ""
-    @State private var email = ""
-    @State private var addRoom = false
+    @State private var houseName = ""
+    @State private var addHouse = false
     @State private var deleting = false
     /// Set once the delete succeeded, so the name field's save on disappear does not touch the deleted project.
     @State private var deleted = false
-    var manager: Bool { project.owner_id == store.userID }
     /// The store's copy, so a rename shows immediately without leaving the screen.
     private var current: Project { store.projects.first(where: { $0.id == project.id }) ?? project }
 
@@ -23,57 +23,43 @@ struct ProjectDetail: View {
 
     var body: some View {
         List {
-            if manager {
+            if level.canManage {
                 NameSection(
                     placeholder: "Project name", stored: current.name, identifier: "project.name", draft: $nameDraft,
                     save: rename)
             }
-            Section("Rooms") {
-                if !store.rooms.contains(where: { $0.project_id == project.id }) {
-                    Label("Add a room to start scanning", systemImage: "door.left.hand.open").foregroundStyle(
-                        .secondary)
+            Section("Houses") {
+                let houses = store.houses.filter { $0.project_id == project.id }
+                if houses.isEmpty {
+                    Label(
+                        level.canManage ? "Add a house to start adding rooms" : "No houses you can see",
+                        systemImage: "house"
+                    ).foregroundStyle(.secondary)
                 }
-                ForEach(store.rooms.filter { $0.project_id == project.id }) { room in
+                ForEach(houses) { house in
                     NavigationLink {
-                        RoomDetail(project: project, initialRoom: room)
+                        HouseDetail(project: current, house: house)
                     } label: {
-                        RoomRow(room: room)
+                        Label(house.name, systemImage: "house")
                     }
                 }
-                if manager {
-                    Button("Add room", systemImage: "plus") {
-                        roomName = ""
-                        addRoom = true
-                    }.accessibilityIdentifier("rooms.new")
+                if level.canManage {
+                    Button("Add house", systemImage: "plus") {
+                        houseName = ""
+                        addHouse = true
+                    }.accessibilityIdentifier("houses.new")
                 }
             }
-            if manager {
-                if store.isLocalMode {
-                    Section {
-                        ProjectFileShareButton(project: project)
-                    } header: {
-                        Text("Share a copy")
-                    } footer: {
-                        Text(
-                            "Send the file with AirDrop or Files. It includes room maps, instructions and images, including any saved room-view photos. Importing creates an editable copy; later changes are not synchronized."
-                        )
-                    }
-                } else {
-                    Section("Grant worker access") {
-                        TextField("Registered worker email", text: $email).keyboardType(.emailAddress)
-                            .textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        Button("Share project", systemImage: "person.badge.plus") {
-                            store.run {
-                                try await store.shareProject(project, withEmail: email)
-                                email = ""
-                            }
-                        }.disabled(email.isEmpty)
-                        NavigationLink {
-                            MembersView(project: project)
-                        } label: {
-                            Label("Manage worker access", systemImage: "person.2")
-                        }
-                    }
+            ResponsibleSection(
+                scope: .project(current), current: current.responsible_id, canChange: store.isAdmin,
+                changed: { try await store.loadProjects() })
+            if level.canManage {
+                Section {
+                    NavigationLink {
+                        AccessView(scope: .project(current))
+                    } label: {
+                        Label("Manage access", systemImage: "person.2")
+                    }.accessibilityIdentifier("project.access")
                 }
                 // HIG (Buttons, Action sheets): keep the destructive action apart from safe ones, in its own
                 // last section, and confirm it because it can't be undone.
@@ -93,32 +79,36 @@ struct ProjectDetail: View {
                             Button("Cancel", role: .cancel) {}
                         } message: {
                             Text(
-                                "This deletes the project and all of its rooms, including scans and photos. This can’t be undone."
+                                "This deletes the project with all its houses, rooms and comments. This can’t be undone."
                             )
                         }
                 } footer: {
-                    Text("Removes the project and all its rooms.")
+                    Text("Removes the project for everyone with access.")
                 }
             }
+            AccessLevelFooter(level: level)
         }
-        .navigationTitle(manager ? nameDraft.titleOrFallback("Untitled Project") : current.name)
+        .navigationTitle(level.canManage ? nameDraft.titleOrFallback("Untitled Project") : current.name)
         .navigationBarTitleDisplayMode(.inline)
-        .task { do { try await store.loadRooms(project) } catch { store.error = error.localizedDescription } }
-        .refreshable {
-            do { try await store.loadRooms(project) } catch { store.error = error.localizedDescription }
-        }
-        .alert("Add room", isPresented: $addRoom) {
-            TextField("Room name", text: $roomName)
+        .task { await reload() }
+        .refreshable { await reload() }
+        .alert("Add house", isPresented: $addHouse) {
+            TextField("House name", text: $houseName)
             Button("Add") {
-                let title = roomName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !title.isEmpty else { return }
-                store.run { try await store.createRoom(in: project, name: title) }
-            }.disabled(roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.busy)
+                store.run { try await store.createHouse(in: project, name: houseName) }
+            }.disabled(DisplayName.normalized(houseName) == nil || store.busy)
             Button("Cancel", role: .cancel) {}
         }
     }
 
     private var projectExists: Bool { !deleted && store.projects.contains(where: { $0.id == project.id }) }
+
+    private func reload() async {
+        do {
+            level = try await store.level(on: .project(current))
+            try await store.loadHouses(project)
+        } catch { store.error = error.localizedDescription }
+    }
 
     private func rename(_ name: String) {
         guard projectExists else { return }
@@ -132,28 +122,5 @@ struct ProjectDetail: View {
                 throw error
             }
         }
-    }
-}
-
-/// One room in the project's list: scan state icon, name and scan state.
-private struct RoomRow: View {
-    let room: Room
-    @ScaledMetric(relativeTo: .title3) private var iconWidth = 32
-    @Environment(\.dynamicTypeSize) private var typeSize
-    var body: some View {
-        // At accessibility sizes the icon goes above the name, so long names keep the full row width.
-        let layout =
-            typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 12))
-        layout {
-            Image(systemName: room.map_path == nil ? "viewfinder" : "cube.transparent").font(.title3)
-                .foregroundStyle(room.map_path == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
-                .frame(width: iconWidth).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(room.name).font(.headline)
-                Text(room.map_path == nil ? "Ready to scan" : "Room map saved").font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }.padding(.vertical, 4)
     }
 }

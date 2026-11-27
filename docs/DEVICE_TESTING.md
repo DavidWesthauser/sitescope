@@ -14,7 +14,7 @@ Before starting: install via Xcode (Developer Mode on, signing set). **Keep Xcod
 
 ## 2. Two phones
 
-- **File transfer (works today):** Export project on A → AirDrop/Files → Import on B. Same rooms, images, statuses. Recognize the room on B. Cancelled and corrupted imports leave no partial project.
+- **Sharing between phones:** file transfer was removed with on-device mode (T-003, 2026-11-27); sharing a scanned room goes through the cloud once it can store scans (T-029).
 - **Cloud (H-003):** manager on A, member on B. Create on A, refresh on B, recognize the room on B, complete a task, see it on A. Outsider sees nothing.
 - **Offline (H-005, after T-008):** airplane mode on B, change status, relaunch, reconnect → syncs to A.
 

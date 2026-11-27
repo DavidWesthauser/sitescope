@@ -1,85 +1,56 @@
 import SwiftUI
 
 /// The app's view model: the state all screens show and the actions they trigger. It validates input, calls the
-/// services and updates its state; how and where data is stored is up to the services.
+/// services and updates its state; storage and rights live on the server (docs/DATABASE_API.md).
+/// The app is only usable while signed in.
 @MainActor final class Store: ObservableObject {
     @Published var projects: [Project] = []
+    @Published var houses: [House] = []
     @Published var rooms: [Room] = []
     @Published var annotations: [Annotation] = []
-    @Published private(set) var members: [Membership] = []
+    /// Every profile; signed-in users may read names and organizations of all people.
+    @Published private(set) var profiles: [Profile] = []
+    @Published private(set) var organizations: [Organization] = []
+    @Published private(set) var isAdmin = false
     @Published private(set) var signedIn = false
     @Published var busy = false
     @Published var error: String?
-    @Published private(set) var isLocalMode = false
-    /// Set when on-device data exists but cannot be decoded. The file is left untouched until the user chooses to start fresh.
-    @Published private(set) var unreadableLocalData: URL?
 
-    /// Where data is stored. Nil only while nothing is configured or local data is unreadable.
     private(set) var repository: DataRepository?
+    private var access: AccessManagement?
     private var backend: Backend?
-    private var sharing: ProjectSharing?
-    private var transfer: ProjectTransferService?
 
     init() {
         do {
             connect(Backend(config: try .load()))
         } catch {
-            #if DEBUG && os(iOS)
-                /// UI tests pass a per-run folder name so each test starts with its own empty local store.
-                let folder = ProcessInfo.processInfo.environment["SITESCOPE_LOCAL_DATA_DIR"]
-                var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                    .appendingPathComponent("sitescope")
-                if let folder {
-                    directory =
-                        folder.hasPrefix("/")
-                        ? URL(fileURLWithPath: folder)
-                        : FileManager.default.temporaryDirectory.appendingPathComponent(folder)
-                }
-                openLocal(at: directory.appendingPathComponent("local.json"))
-            #else
-                self.error = error.localizedDescription
-            #endif
+            self.error = error.localizedDescription
         }
-    }
-    /// Explicit local storage entry point; never changes cloud authentication or Keychain.
-    init(localURL: URL) {
-        openLocal(at: localURL)
     }
     init(backend: Backend) {
         connect(backend)
     }
-
+    /// For tests: a signed-in store on any storage, without account management.
+    init(repository: DataRepository) {
+        self.repository = repository
+        signedIn = true
+    }
     private func connect(_ backend: Backend) {
         let cloud = CloudRepository(backend: backend)
         self.backend = backend
         repository = cloud
-        sharing = cloud
+        access = cloud
         signedIn = backend.user != nil
-    }
-    private func openLocal(at url: URL) {
-        do {
-            let local = try LocalDataStore(fileURL: url)
-            // On-device data is always current: every saved change, also one the AR screen makes, is mirrored here.
-            local.onChange = { [weak self] data in self?.show(data) }
-            repository = LocalRepository(storage: local)
-            transfer = ProjectTransferService(storage: local)
-            isLocalMode = true
-            signedIn = true
-            show(local.data)
-        } catch {
-            unreadableLocalData = url
-            self.error = "Could not open local data: \(error.localizedDescription)"
-        }
-    }
-    private func show(_ data: LocalData) {
-        projects = data.projects
-        rooms = data.rooms
-        annotations = data.annotations
     }
 
     var userID: UUID? { repository?.userID }
     var hasBackend: Bool { backend != nil }
     var accountEmail: String? { backend?.user?.email }
+    var myProfile: Profile? { profiles.first { $0.user_id == userID } }
+    func name(of person: UUID?) -> String {
+        guard let person else { return "Nobody" }
+        return profiles.first { $0.user_id == person }?.display_name ?? "Unknown person"
+    }
 
     /// Actions waiting for the one that is running.
     private var queuedOperations: [@MainActor () async throws -> Void] = []
@@ -101,15 +72,22 @@ import SwiftUI
     }
     /// The storage for screens that hand it to their own view model, such as the AR screen.
     func requireRepository() throws -> DataRepository {
-        guard let repository else { throw AppError.message("Backend is not configured. See README.") }
+        guard let repository else { throw Self.notConfigured }
         return repository
     }
+    private func requireAccess() throws -> AccessManagement {
+        guard let access else { throw Self.notConfigured }
+        return access
+    }
+    private static let notConfigured = AppError.message(
+        "No server is configured. Add the Supabase URL and publishable key to Secrets.xcconfig (docs/BACKEND_SETUP.md)."
+    )
 
     // MARK: Account
 
     /// Returns false when the account was created but still needs email confirmation.
     func signIn(email: String, password: String, register: Bool) async throws -> Bool {
-        guard let backend else { throw AppError.message("Backend is not configured. See README.") }
+        guard let backend else { throw Self.notConfigured }
         let active = try await backend.authenticate(
             email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password, register: register)
         signedIn = active
@@ -118,34 +96,48 @@ import SwiftUI
     func signOut() async {
         await backend?.signOut()
         projects = []
+        houses = []
         rooms = []
         annotations = []
-        members = []
+        profiles = []
+        organizations = []
+        isAdmin = false
         signedIn = false
     }
+    /// Names of all people and whether the user is an admin; screens ask for their own scope's level.
+    func loadAccount() async throws {
+        let access = try requireAccess()
+        profiles = try await access.profiles()
+        isAdmin = try await access.isAdmin()
+    }
+    func setDisplayName(_ value: String) async throws {
+        guard let me = myProfile else { throw AppError.message("Your profile could not be loaded.") }
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1...80).contains(text.count) else { throw AppError.message("Use a name between 1 and 80 characters.") }
+        try await requireAccess().setDisplayName(text, of: me)
+        profiles = try await requireAccess().profiles()
+    }
 
-    // MARK: Projects, rooms, tasks
+    // MARK: Projects, houses, rooms
 
-    /// On-device data needs no loading: `openLocal` mirrors every saved change.
     func loadProjects() async throws {
-        guard !isLocalMode else { return }
         projects = try await requireRepository().loadProjects()
     }
-    func loadRooms(_ project: Project) async throws {
-        guard !isLocalMode else { return }
-        rooms = try await requireRepository().loadRooms(of: project)
+    func loadHouses(_ project: Project) async throws {
+        houses = try await requireRepository().loadHouses(of: project)
+    }
+    func loadRooms(_ house: House) async throws {
+        rooms = try await requireRepository().loadRooms(of: house)
     }
     func room(id: UUID) async throws -> Room {
         try await requireRepository().loadRoom(id: id)
     }
     func loadAnnotations(_ room: Room) async throws {
-        guard !isLocalMode else { return }
         annotations = try await requireRepository().loadAnnotations(of: room)
     }
 
     func createProject(name value: String) async throws {
-        guard let owner = userID else { throw AppError.message("Please sign in.") }
-        try await requireRepository().createProject(Project(owner_id: owner, name: try DisplayName.validated(value)))
+        try await requireRepository().createProject(Project(name: try DisplayName.validated(value)))
         try await loadProjects()
     }
     func renameProject(_ project: Project, name value: String) async throws {
@@ -156,18 +148,46 @@ import SwiftUI
         try await requireRepository().deleteProject(project)
         try await loadProjects()
     }
-    func createRoom(in project: Project, name value: String) async throws {
-        try await requireRepository().createRoom(Room(project_id: project.id, name: try DisplayName.validated(value)))
-        try await loadRooms(project)
+
+    func createHouse(in project: Project, name value: String) async throws {
+        try await requireRepository().createHouse(House(project_id: project.id, name: try DisplayName.validated(value)))
+        try await loadHouses(project)
+    }
+    func renameHouse(_ house: House, name value: String) async throws {
+        try await requireRepository().renameHouse(house, to: try DisplayName.validated(value))
+        houses = try await requireRepository().loadHouses(of: Project(id: house.project_id, name: ""))
+    }
+    func deleteHouse(_ house: House) async throws {
+        try await requireRepository().deleteHouse(house)
+        houses.removeAll { $0.id == house.id }
+    }
+
+    func createRoom(in house: House, name value: String) async throws {
+        let room = Room(project_id: house.project_id, house_id: house.id, name: try DisplayName.validated(value))
+        try await requireRepository().createRoom(room)
+        try await loadRooms(house)
     }
     func renameRoom(_ room: Room, name value: String) async throws {
         try await requireRepository().renameRoom(room, to: try DisplayName.validated(value))
     }
+    /// Dimensions are metres with at most 4 digits before the point (`numeric(6,2)`); empty means unknown.
+    func updateRoomDetails(_ room: Room) async throws {
+        for value in [room.height, room.length, room.width].compactMap({ $0 }) {
+            guard value > 0, value < 10_000 else {
+                throw AppError.message("Use positive dimensions in metres, below 10,000.")
+            }
+        }
+        try await requireRepository().updateRoomDetails(room)
+    }
     func deleteRoom(_ room: Room) async throws {
         try await requireRepository().deleteRoom(room)
+        rooms.removeAll { $0.id == room.id }
     }
+
+    // MARK: AR data (kept for the AR screens; the server has no tables for it yet, T-029)
+
     func saveTask(_ item: Annotation, room: Room, manager: Bool) async throws {
-        try await requireRepository().saveTask(item, in: room, asManager: manager)
+        try await requireRepository().saveTask(item, in: room, canEdit: manager)
         try await loadAnnotations(room)
     }
     func deleteTask(_ item: Annotation, room: Room) async throws {
@@ -181,54 +201,48 @@ import SwiftUI
         try await requireRepository().saveInstruction(item, in: room, replacing: replacing)
     }
 
-    // MARK: Sharing (cloud only)
+    // MARK: Rights
 
-    private func requireSharing() throws -> ProjectSharing {
-        guard let sharing else {
-            throw AppError.message(
-                isLocalMode
-                    ? "Cloud sharing requires Supabase. Your room data is saved on this device."
-                    : "Backend is not configured. See README.")
+    func level(on scope: AccessScope) async throws -> AccessLevel {
+        try await requireAccess().level(on: scope)
+    }
+    func grants(on scope: AccessScope) async throws -> [AccessGrant] {
+        try await requireAccess().grants(on: scope)
+    }
+    func grant(_ role: AccessRole, on scope: AccessScope, toEmail email: String) async throws {
+        try await requireAccess().grant(role, on: scope, toEmail: email)
+    }
+    func revoke(_ grant: AccessGrant) async throws {
+        try await requireAccess().revoke(grant)
+    }
+    func setResponsible(_ person: UUID, of scope: AccessScope) async throws {
+        try await requireAccess().setResponsible(person, of: scope)
+    }
+
+    // MARK: Administration
+
+    func loadPeople() async throws {
+        profiles = try await requireAccess().profiles()
+        organizations = try await requireAccess().organizations()
+    }
+    func setActive(_ active: Bool, of profile: Profile) async throws {
+        guard profile.user_id != userID || active else {
+            throw AppError.message("You cannot deactivate your own account.")
         }
-        return sharing
+        try await requireAccess().setActive(active, of: profile)
+        try await loadPeople()
     }
-    func loadMembers(of project: Project) async throws {
-        members = try await requireSharing().members(of: project)
+    func setOrganization(_ organization: UUID?, of profile: Profile) async throws {
+        try await requireAccess().setOrganization(organization, of: profile)
+        try await loadPeople()
     }
-    func shareProject(_ project: Project, withEmail email: String) async throws {
-        try await requireSharing().share(project, withEmail: email)
-    }
-    func revokeMember(_ member: Membership, from project: Project) async throws {
-        try await requireSharing().revoke(member, from: project)
-        try await loadMembers(of: project)
-    }
-
-    // MARK: Project files (on-device only)
-
-    func exportProjectFile(_ project: Project) async throws -> URL {
-        guard let transfer else {
-            throw AppError.message(
-                "Project files are available for projects saved on this device. Cloud projects use project sharing.")
+    func saveOrganization(_ organization: Organization, isNew: Bool) async throws {
+        var value = organization
+        value.name = value.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1...160).contains(value.name.count) else {
+            throw AppError.message("Use an organization name between 1 and 160 characters.")
         }
-        return try await transfer.export(project)
-    }
-    /// Imports an independent copy; existing projects, identifiers and coordinate systems are never replaced.
-    func importProjectFile(from source: URL) async throws -> Project {
-        guard let transfer, let owner = userID else {
-            throw AppError.message("Import a project file in on-device mode. Cloud projects use project sharing.")
-        }
-        return try await transfer.importProject(from: source, owner: owner)
-    }
-
-    // MARK: Recovery
-
-    /// Moves the unreadable file aside (never deletes it) and opens an empty on-device store. Returns the backup location.
-    @discardableResult func startFreshKeepingBackup() throws -> URL {
-        guard let url = unreadableLocalData else { throw AppError.message("Local data is already readable.") }
-        let backup = try LocalDataStore.moveAside(url)
-        unreadableLocalData = nil
-        error = nil
-        openLocal(at: url)
-        return backup
+        try await requireAccess().saveOrganization(value, isNew: isNew)
+        try await loadPeople()
     }
 }

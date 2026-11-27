@@ -19,7 +19,11 @@ struct Configuration {
             let url = URL(string: raw), url.scheme == "https", url.host != nil,
             let key = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String,
             !key.isEmpty, !key.contains("YOUR_")
-        else { throw AppError.message("Configure SUPABASE_URL and SUPABASE_ANON_KEY in Config.xcconfig. See README.") }
+        else {
+            throw AppError.message(
+                "No server is configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to Secrets.xcconfig (docs/BACKEND_SETUP.md)."
+            )
+        }
         return Configuration(url: url, key: key)
     }
 }
@@ -57,10 +61,14 @@ struct Configuration {
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            // The server's own text is readable; the status code only helps when there is none.
             let message =
                 object?["msg"] as? String ?? object?["message"] as? String ?? object?["error_description"] as? String
-                ?? "Request failed"
-            throw AppError.message("\(message) (\(code)). Refresh or sign in again if access expired.")
+                ?? "The request failed (\(code))"
+            // Only an expired session or missing rights is helped by refreshing; a wrong password is not.
+            let hint = [401, 403].contains(code) ? " Refresh or sign in again if access expired." : ""
+            let sentence = message.hasSuffix(".") ? message : message + "."
+            throw AppError.message(sentence + hint)
         }
         return data
     }
@@ -102,9 +110,11 @@ struct Configuration {
         if persistSession { Vault.delete() }
         session = nil
     }
-    func list<T: Decodable>(_ table: String, query: String = "") async throws -> [T] {
+    /// `select` is a PostgREST column list and may embed related rows, e.g. `*,user:profiles!user_id(display_name)`.
+    func list<T: Decodable>(_ table: String, select: String = "*", query: String = "") async throws -> [T] {
         let access = try await token()
-        return try JSONDecoder().decode([T].self, from: await raw("/rest/v1/\(table)?select=*\(query)", token: access))
+        return try JSONDecoder().decode(
+            [T].self, from: await raw("/rest/v1/\(table)?select=\(select)\(query)", token: access))
     }
     func insert<T: Encodable>(_ table: String, value: T) async throws {
         let access = try await token()
@@ -112,10 +122,11 @@ struct Configuration {
             "/rest/v1/\(table)", method: "POST", body: JSONEncoder().encode(value), token: access,
             prefer: "return=minimal")
     }
-    func update<T: Encodable>(_ table: String, id: UUID, value: T) async throws {
+    /// `key` is the primary key column; `profiles` uses `user_id`.
+    func update<T: Encodable>(_ table: String, key: String = "id", id: UUID, value: T) async throws {
         let access = try await token()
         let data = try await raw(
-            "/rest/v1/\(table)?id=eq.\(id)", method: "PATCH", body: JSONEncoder().encode(value), token: access,
+            "/rest/v1/\(table)?\(key)=eq.\(id)", method: "PATCH", body: JSONEncoder().encode(value), token: access,
             prefer: "return=representation")
         guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]], !rows.isEmpty else {
             throw AppError.message("No record was updated. Your access may have changed; refresh.")
@@ -130,10 +141,20 @@ struct Configuration {
         }
     }
     func rpc(_ name: String, arguments: [String: String]) async throws {
+        try await rpc(name, body: arguments)
+    }
+    func rpc<Body: Encodable>(_ name: String, body: Body) async throws {
         let access = try await token()
-        _ = try await raw(
-            "/rest/v1/rpc/\(name)", method: "POST", body: JSONSerialization.data(withJSONObject: arguments),
-            token: access)
+        _ = try await raw("/rest/v1/rpc/\(name)", method: "POST", body: JSONEncoder().encode(body), token: access)
+    }
+    /// An RPC that returns a value, such as `scope_level` (a number) or `is_admin` (a boolean).
+    func rpc<Body: Encodable, Result: Decodable>(_ name: String, body: Body, returning: Result.Type) async throws
+        -> Result
+    {
+        let access = try await token()
+        let data = try await raw(
+            "/rest/v1/rpc/\(name)", method: "POST", body: JSONEncoder().encode(body), token: access)
+        return try JSONDecoder().decode(Result.self, from: data)
     }
     func upload(path: String, data: Data, type: String) async throws {
         let access = try await token()
