@@ -122,4 +122,22 @@ final class StubProtocol: URLProtocol {
         _ = try await backend.authenticate(email: "fixture@example.test", password: "password", register: false)
         try await backend.rpc("set_task_status", arguments: ["task": task.uuidString, "new_status": "completed"])
     }
+    func testCloudRoomRenameReloadsTheRoomList() async throws {
+        let auth = try authData()
+        var room = Room(project_id: UUID(), name: "Old name")
+        let backend = backend { request in
+            if request.url!.path.contains("/auth/") { return (200, auth) }
+            if request.httpMethod == "PATCH" {
+                room.name = "New name"
+                return (200, try JSONEncoder().encode([room]))
+            }
+            XCTAssertTrue(request.url!.query!.contains("project_id=eq.\(room.project_id)"))
+            return (200, try JSONEncoder().encode([room]))
+        }
+        _ = try await backend.authenticate(email: "fixture@example.test", password: "password", register: false)
+        let store = Store(backend: backend)
+        store.rooms = [room]
+        try await store.renameRoom(store.rooms[0], name: "New name")
+        XCTAssertEqual(store.rooms.map(\.name), ["New name"])
+    }
 }

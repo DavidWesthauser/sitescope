@@ -7,6 +7,11 @@ private struct LocalData: Codable, Sendable {
     var annotations: [Annotation] = []
     // Fixed literal UUID: the force unwrap cannot fail.
     static let userID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    /// Asset files (room maps and images) the given rooms and notes refer to. Every kind of asset reference must be
+    /// listed here: `removeLeftoverFiles` deletes any file in `assets/` that this list does not name.
+    static func assetPaths(rooms: [Room], annotations: [Annotation]) -> [String] {
+        rooms.compactMap(\.map_path) + annotations.compactMap(\.image?.path)
+    }
 }
 
 @MainActor final class Store: ObservableObject {
@@ -68,16 +73,24 @@ private struct LocalData: Codable, Sendable {
             isLocalMode = true
             signedIn = true
             apply(data)
+            removeLeftoverFiles()
         } catch {
             unreadableLocalData = url
             self.error = "Could not open local data: \(error.localizedDescription)"
         }
     }
     /// Moves the unreadable file aside (never deletes it) and opens an empty on-device store. Returns the backup location.
+    /// Its `assets/` folder moves aside too, so the empty store's start-up cleanup cannot delete the backup's files.
     @discardableResult func startFreshKeepingBackup() throws -> URL {
         guard let url = unreadableLocalData else { throw AppError.message("Local data is already readable.") }
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let backup = url.deletingLastPathComponent().appendingPathComponent("local-unreadable-\(stamp).json")
+        let folder = url.deletingLastPathComponent()
+        let backup = folder.appendingPathComponent("local-unreadable-\(stamp).json")
+        let assets = folder.appendingPathComponent("assets")
+        if FileManager.default.fileExists(atPath: assets.path) {
+            try FileManager.default.moveItem(
+                at: assets, to: folder.appendingPathComponent("assets-unreadable-\(stamp)"))
+        }
         try FileManager.default.moveItem(at: url, to: backup)
         unreadableLocalData = nil
         error = nil
@@ -143,9 +156,10 @@ private struct LocalData: Codable, Sendable {
         guard !isLocalMode else { return }
         projects = try await client().list("projects", query: "&order=name")
     }
-    func loadRooms(_ project: Project) async throws {
+    func loadRooms(_ project: Project) async throws { try await loadRooms(projectID: project.id) }
+    func loadRooms(projectID: UUID) async throws {
         guard !isLocalMode else { return }
-        rooms = try await client().list("rooms", query: "&project_id=eq.\(project.id)&order=name")
+        rooms = try await client().list("rooms", query: "&project_id=eq.\(projectID)&order=name")
     }
     func room(id: UUID) async throws -> Room {
         if isLocalMode, let room = rooms.first(where: { $0.id == id }) { return room }
@@ -193,12 +207,17 @@ private struct LocalData: Codable, Sendable {
     }
     func deleteProject(_ project: Project) async throws {
         if isLocalMode {
+            let roomIDs = Set(rooms.filter { $0.project_id == project.id }.map(\.id))
+            let files = LocalData.assetPaths(
+                rooms: rooms.filter { roomIDs.contains($0.id) },
+                annotations: annotations.filter { roomIDs.contains($0.room_id) })
             try await changeLocal { data in
                 let roomIDs = Set(data.rooms.filter { $0.project_id == project.id }.map(\.id))
                 data.annotations.removeAll { roomIDs.contains($0.room_id) }
                 data.rooms.removeAll { $0.project_id == project.id }
                 data.projects.removeAll { $0.id == project.id }
             }
+            removeUnusedAssets(files)
         } else {
             try await client().delete("projects", id: project.id)
             try await loadProjects()
@@ -224,16 +243,21 @@ private struct LocalData: Codable, Sendable {
             }
         } else {
             try await client().update("rooms", id: room.id, value: ["name": title])
+            try await loadRooms(projectID: room.project_id)
         }
     }
     func deleteRoom(_ room: Room) async throws {
         if isLocalMode {
+            let files = LocalData.assetPaths(
+                rooms: rooms.filter { $0.id == room.id }, annotations: annotations.filter { $0.room_id == room.id })
             try await changeLocal { data in
                 data.annotations.removeAll { $0.room_id == room.id }
                 data.rooms.removeAll { $0.id == room.id }
             }
+            removeUnusedAssets(files)
         } else {
             try await client().delete("rooms", id: room.id)
+            try await loadRooms(projectID: room.project_id)
         }
     }
     func saveTask(_ item: Annotation, room: Room, manager: Bool) async throws {
@@ -255,7 +279,9 @@ private struct LocalData: Codable, Sendable {
     }
     func deleteTask(_ item: Annotation, room: Room) async throws {
         if isLocalMode {
+            let files = LocalData.assetPaths(rooms: [], annotations: annotations.filter { $0.id == item.id })
             try await changeLocal { $0.annotations.removeAll { $0.id == item.id } }
+            removeUnusedAssets(files)
         } else {
             try await client().delete("annotations", id: item.id)
             try await loadAnnotations(room)
@@ -264,11 +290,13 @@ private struct LocalData: Codable, Sendable {
 }
 
 extension Store {
+    /// Room maps and images live in `assets/` next to `local.json`, at their relative asset path.
+    private var assetRoot: URL? { localURL?.deletingLastPathComponent().appendingPathComponent("assets") }
     private func assetURL(_ path: String) throws -> URL {
-        guard let localURL, !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else {
+        guard let assetRoot, !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else {
             throw AppError.message("Invalid asset path.")
         }
-        return localURL.deletingLastPathComponent().appendingPathComponent("assets").appendingPathComponent(path)
+        return assetRoot.appendingPathComponent(path)
     }
     func downloadAsset(path: String) async throws -> Data {
         if isLocalMode { return try Data(contentsOf: assetURL(path)) }
@@ -304,28 +332,88 @@ extension Store {
             try await client().update("rooms", id: room.id, value: room)
         }
     }
-    func saveInstruction(_ item: Annotation, room: Room, replacing: Bool) async throws {
+    /// Saves a placed note. A new image is uploaded first and removed again if the save fails; the image a
+    /// repositioned note replaces is removed once the save succeeded.
+    func saveInstruction(_ item: Annotation, room: Room, replacing: Bool, imageData: Data? = nil) async throws {
         try item.validate(room: room)
         guard room.map_path != nil else { throw AppError.message("Map the room before placing instructions.") }
-        if isLocalMode {
-            try await changeLocal { data in
-                guard
-                    data.rooms.contains(where: {
-                        $0.id == room.id && $0.coordinate_id == room.coordinate_id && $0.map_path != nil
-                    })
-                else { throw AppError.message("Saved room map unavailable.") }
-                if replacing {
-                    guard let i = data.annotations.firstIndex(where: { $0.id == item.id && $0.room_id == room.id })
-                    else { throw AppError.message("Instruction no longer exists.") }
-                    data.annotations[i] = item
-                } else {
-                    data.annotations.append(item)
+        if let imageData, let path = item.image?.path {
+            try await uploadAsset(path: path, data: imageData, type: "image/png")
+        }
+        do {
+            if isLocalMode {
+                let replaced = LocalData.assetPaths(
+                    rooms: [], annotations: annotations.filter { replacing && $0.id == item.id })
+                try await changeLocal { data in
+                    guard
+                        data.rooms.contains(where: {
+                            $0.id == room.id && $0.coordinate_id == room.coordinate_id && $0.map_path != nil
+                        })
+                    else { throw AppError.message("Saved room map unavailable.") }
+                    if replacing {
+                        guard let i = data.annotations.firstIndex(where: { $0.id == item.id && $0.room_id == room.id })
+                        else { throw AppError.message("Instruction no longer exists.") }
+                        data.annotations[i] = item
+                    } else {
+                        data.annotations.append(item)
+                    }
                 }
+                removeUnusedAssets(replaced)
+            } else if replacing {
+                try await client().update("annotations", id: item.id, value: item)
+            } else {
+                try await client().insert("annotations", value: item)
             }
-        } else if replacing {
-            try await client().update("annotations", id: item.id, value: item)
-        } else {
-            try await client().insert("annotations", value: item)
+        } catch {
+            // Cloud uploads stay until storage cleanup exists (T-008); local ones are removed right away.
+            if imageData != nil, let path = item.image?.path { removeUnusedAssets([path]) }
+            throw error
+        }
+    }
+    /// Deletes local asset files that no room or note refers to any more. It runs after a change is saved, so a
+    /// failed change never loses a file, and a file another room or note still uses is kept. Cloud files are not
+    /// removed yet (T-008). A file that cannot be removed now is removed by `removeLeftoverFiles` on the next start.
+    func removeUnusedAssets(_ paths: [String]) {
+        guard isLocalMode, let root = assetRoot else { return }
+        // Lowercased: the file system may ignore case, so a file is kept if any reference matches it that way.
+        let used = Set(LocalData.assetPaths(rooms: rooms, annotations: annotations).map { $0.lowercased() })
+        for path in Set(paths) where !used.contains(path.lowercased()) {
+            guard let url = try? assetURL(path) else { continue }
+            try? FileManager.default.removeItem(at: url)
+            removeEmptyFolders(from: url.deletingLastPathComponent(), below: root)
+        }
+    }
+    /// Removes what an interrupted save or import left behind: asset files nothing refers to (a map uploaded for
+    /// a scan that was never published, an image whose save crashed) and import staging folders. It runs only while
+    /// opening the local store, before any save can be in flight.
+    private func removeLeftoverFiles() {
+        guard let localURL, let root = assetRoot else { return }
+        let fm = FileManager.default
+        let folder = localURL.deletingLastPathComponent()
+        for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? []
+        where name.hasPrefix(".sitescope-transfer-") {
+            try? fm.removeItem(at: folder.appendingPathComponent(name))
+        }
+        let base = root.resolvingSymlinksInPath().pathComponents
+        var unused: [String] = []
+        let files = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey])?.allObjects ?? []
+        for case let url as URL in files {
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
+            let parts = url.resolvingSymlinksInPath().pathComponents
+            guard parts.starts(with: base) else { continue }
+            unused.append(parts.dropFirst(base.count).joined(separator: "/"))
+        }
+        removeUnusedAssets(unused)
+    }
+    private func removeEmptyFolders(from folder: URL, below root: URL) {
+        var folder = folder.standardizedFileURL
+        let root = root.standardizedFileURL
+        let fm = FileManager.default
+        while folder.path.hasPrefix(root.path + "/"),
+            (try? fm.contentsOfDirectory(atPath: folder.path))?.isEmpty == true
+        {
+            try? fm.removeItem(at: folder)
+            folder = folder.deletingLastPathComponent()
         }
     }
 }

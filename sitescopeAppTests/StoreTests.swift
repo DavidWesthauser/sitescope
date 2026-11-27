@@ -228,3 +228,112 @@ extension StoreTests {
         XCTAssertEqual(Store(localURL: url).projects.map(\.name), ["After recovery"])
     }
 }
+
+/// Files left behind after deletes, replaced images and failed saves (T-027).
+@MainActor final class StoreFileCleanupTests: XCTestCase {
+    private var folder: URL!
+    private var assets: URL { folder.appendingPathComponent("assets") }
+    override func setUpWithError() throws {
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    }
+    override func tearDownWithError() throws { try? FileManager.default.removeItem(at: folder) }
+
+    private func exists(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: assets.appendingPathComponent(path).path)
+    }
+    /// A local store with one project and one mapped room.
+    private func mappedRoom(_ store: Store, project name: String = "Site") async throws -> Room {
+        try await store.createProject(name: name)
+        let project = try XCTUnwrap(store.projects.first { $0.name == name })
+        try await store.createRoom(in: project, name: "Room")
+        var room = try XCTUnwrap(store.rooms.last)
+        room.map_path = "\(project.id)/\(room.id)/map.worldmap"
+        try await store.uploadAsset(path: room.map_path!, data: Data([1]), type: "application/octet-stream")
+        try await store.publishRoom(room)
+        return room
+    }
+    private func image(in room: Room, path name: String) -> Annotation {
+        var item = Annotation(
+            room: room, kind: .image, pose: .identity, points: [Point3(.zero)], title: "Image", detail: "")
+        item.image = SpatialImage(path: "\(room.project_id)/\(room.id)/\(name)", width: 0.4, height: 0.3)
+        return item
+    }
+
+    func testDeletingRoomOrProjectRemovesItsFilesOnly() async throws {
+        let store = Store(localURL: folder.appendingPathComponent("local.json"))
+        let first = try await mappedRoom(store)
+        let item = image(in: first, path: "a.png")
+        try await store.saveInstruction(item, room: first, replacing: false, imageData: Data([2]))
+        let other = try await mappedRoom(store, project: "Other site")
+        try await store.deleteRoom(first)
+        XCTAssertFalse(exists(first.map_path!))
+        XCTAssertFalse(exists(item.image!.path))
+        XCTAssertTrue(exists(other.map_path!))
+        let project = try XCTUnwrap(store.projects.first { $0.id == other.project_id })
+        try await store.deleteProject(project)
+        XCTAssertFalse(exists(other.map_path!))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: assets.appendingPathComponent("\(project.id)").path))
+    }
+
+    func testReplacingOrDeletingAnImageKeepsFilesOtherNotesUse() async throws {
+        let store = Store(localURL: folder.appendingPathComponent("local.json"))
+        let room = try await mappedRoom(store)
+        let original = image(in: room, path: "old.png")
+        var twin = image(in: room, path: "old.png")  // Two notes on the same file.
+        try await store.saveInstruction(original, room: room, replacing: false, imageData: Data([2]))
+        try await store.saveInstruction(twin, room: room, replacing: false)
+        var moved = original
+        moved.image?.path = "\(room.project_id)/\(room.id)/new.png"
+        try await store.saveInstruction(moved, room: room, replacing: true, imageData: Data([3]))
+        XCTAssertTrue(exists(original.image!.path), "The twin note still shows the old image")
+        XCTAssertTrue(exists(moved.image!.path))
+        twin.image?.path = "\(room.project_id)/\(room.id)/other.png"
+        try await store.saveInstruction(twin, room: room, replacing: true, imageData: Data([4]))
+        XCTAssertFalse(exists(original.image!.path), "No note uses the old image any more")
+        try await store.deleteTask(moved, room: room)
+        XCTAssertFalse(exists(moved.image!.path))
+        XCTAssertTrue(exists(twin.image!.path))
+    }
+
+    func testFailedImageSaveRemovesTheUploadedFile() async throws {
+        let store = Store(localURL: folder.appendingPathComponent("local.json"))
+        let room = try await mappedRoom(store)
+        let item = image(in: room, path: "a.png")
+        var gone = item
+        gone.id = UUID()
+        do {
+            try await store.saveInstruction(gone, room: room, replacing: true, imageData: Data([2]))
+            XCTFail("Replacing a note that does not exist must fail")
+        } catch {}
+        XCTAssertFalse(exists(item.image!.path))
+        XCTAssertTrue(exists(room.map_path!))
+    }
+
+    func testOpeningRemovesLeftoverFilesButKeepsUsedOnes() async throws {
+        let url = folder.appendingPathComponent("local.json")
+        let room = try await mappedRoom(Store(localURL: url))
+        let leftover = "\(room.project_id)/\(room.id)/unpublished.worldmap"
+        try FileManager.default.createDirectory(
+            at: assets.appendingPathComponent(leftover).deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data([9]).write(to: assets.appendingPathComponent(leftover))
+        let staging = folder.appendingPathComponent(".sitescope-transfer-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+        _ = Store(localURL: url)
+        XCTAssertFalse(exists(leftover))
+        XCTAssertTrue(exists(room.map_path!))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+    }
+
+    func testStartingFreshKeepsTheBackupsFiles() async throws {
+        let url = folder.appendingPathComponent("local.json")
+        let room = try await mappedRoom(Store(localURL: url))
+        try Data("unreadable".utf8).write(to: url)
+        let store = Store(localURL: url)
+        _ = try store.startFreshKeepingBackup()
+        let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        let backup = try XCTUnwrap(names.first { $0.hasPrefix("assets-unreadable-") })
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: folder.appendingPathComponent(backup).appendingPathComponent(room.map_path!).path))
+    }
+}

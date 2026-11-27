@@ -660,14 +660,12 @@ struct ARScreen: View {
                     title: label.isEmpty
                         ? (ar.tool == .area ? "Area marking" : (ar.tool == .image ? "Image" : "Drawing")) : label,
                     detail: detail, priority: priority, image: attachment)
-                if let attachment, let data = ar.imageData {
-                    try await store.uploadAsset(path: attachment.path, data: data, type: "image/png")
-                }
                 if let replacing {
                     item.id = replacing.id
                     item.status = replacing.status
                 }
-                try await store.saveInstruction(item, room: room, replacing: replacing != nil)
+                try await store.saveInstruction(
+                    item, room: room, replacing: replacing != nil, imageData: attachment == nil ? nil : ar.imageData)
                 replacing = nil
                 ar.clearDraft()
                 ar.resumeCamera()
