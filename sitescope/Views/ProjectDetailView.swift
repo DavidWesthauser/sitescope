@@ -107,7 +107,14 @@ struct ProjectDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { do { try await store.loadRooms(project) } catch { store.error = error.localizedDescription } }
         .refreshable {
-            do { try await store.loadRooms(project) } catch { store.error = error.localizedDescription }
+            do {
+                try await store.loadProjects()
+                try await store.loadRooms(project)
+            } catch { store.error = error.localizedDescription }
+        }
+        // Pick up a name changed elsewhere (another device, a reverted save), but never overwrite what is typed.
+        .onChange(of: current.name) { previous, stored in
+            if nameDraft == previous { nameDraft = stored }
         }
         .alert("Add room", isPresented: $addRoom) {
             TextField("Room name", text: $roomName)
