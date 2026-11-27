@@ -3,7 +3,6 @@ import UIKit
 
 @main struct SitescopeApp: App {
     @StateObject private var store = Store()
-    @State private var importedProjectName: String?
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
     init() {
         // HIG (Text fields): show a Clear button at the trailing end of single-line text fields.
@@ -17,44 +16,23 @@ import UIKit
     }
     var body: some Scene {
         WindowGroup {
+            // The app is only usable while signed in.
             Group {
                 if store.signedIn {
                     ProjectDashboard()
-                } else if store.unreadableLocalData != nil {
-                    LocalDataRecoveryView()
                 } else {
                     AuthenticationView()
                 }
             }
             .environmentObject(store)
             .appAppearance(appearance)
-            .onOpenURL { url in
-                guard !store.busy else {
-                    store.error = "Finish the current operation, then open the project file again."
-                    return
-                }
-                store.run { importedProjectName = try await store.importProjectFile(from: url).name }
-            }
             .alert(
-                store.error == nil && importedProjectName != nil ? "Project imported" : "sitescope",
-                isPresented: Binding(
-                    get: { store.error != nil || importedProjectName != nil },
-                    set: {
-                        if !$0 {
-                            store.error = nil
-                            importedProjectName = nil
-                        }
-                    })
+                "sitescope",
+                isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })
             ) {
-                Button("OK") {
-                    store.error = nil
-                    importedProjectName = nil
-                }
+                Button("OK") { store.error = nil }
             } message: {
-                Text(
-                    store.error
-                        ?? "“\(importedProjectName ?? "Project")” is now an editable copy in Projects. Later changes are not synchronized."
-                )
+                Text(store.error ?? "")
             }
             .overlay {
                 if store.busy {

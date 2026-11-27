@@ -223,20 +223,21 @@ final class SpatialTests: XCTestCase {
         XCTAssertEqual(state.state, .relocalizing)
     }
     func testAnnotationSerializationAndRoomIsolation() throws {
-        let room = Room(project_id: UUID(), name: "Kitchen")
+        let room = Room(project_id: UUID(), house_id: UUID(), name: "Kitchen")
         var item = Annotation(
             room: room, kind: .text, pose: try transform(SIMD3(1, 2, 3)), title: "Paint wall", detail: "Blue")
         item.status = .inProgress
         let restored = try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(item))
         XCTAssertEqual(restored, item)
         try restored.validate(room: room)
-        XCTAssertThrowsError(try restored.validate(room: Room(project_id: room.project_id, name: "Other")))
+        XCTAssertThrowsError(
+            try restored.validate(room: Room(project_id: room.project_id, house_id: UUID(), name: "Other")))
         var remapped = room
         remapped.coordinate_id = UUID()
         XCTAssertThrowsError(try restored.validate(room: remapped))
     }
     func testAreaMustHavePlanarNoncollinearGeometry() throws {
-        let room = Room(project_id: UUID(), name: "Room")
+        let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
         var item = Annotation(
             room: room, kind: .area, pose: .identity,
             points: [Point3(.zero), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(1, 1, 0))], title: "Wall", detail: "")
@@ -247,7 +248,7 @@ final class SpatialTests: XCTestCase {
         XCTAssertThrowsError(try item.validate(room: room))
     }
     func testTaskStatusAndPriorityPersist() throws {
-        let room = Room(project_id: UUID(), name: "Room")
+        let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
         for status in TaskStatus.allCases {
             var task = Annotation(room: room, kind: .marker, pose: .identity, title: "Repair", detail: "Check pipe")
             task.status = status
@@ -256,7 +257,7 @@ final class SpatialTests: XCTestCase {
         }
     }
     func testRoomMetadataRoundtripAndVersionRejection() throws {
-        var room = Room(project_id: UUID(), name: "Kitchen")
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Kitchen")
         room.marker = Marker(
             id: UUID(), image_path: "project/room/marker.png", width: 0.2, height: 0.3, room_from_marker: .identity)
         room.reference_points = [Point3(.zero), Point3(SIMD3(1, 0, 0))]
@@ -265,9 +266,9 @@ final class SpatialTests: XCTestCase {
         XCTAssertThrowsError(try room.validate())
     }
     func testProjectAndRoomIDsRemainStableOnRename() throws {
-        var project = Project(owner_id: UUID(), name: "Old")
+        var project = Project(name: "Old")
         let projectID = project.id
-        var room = Room(project_id: projectID, name: "Old")
+        var room = Room(project_id: projectID, house_id: UUID(), name: "Old")
         let coordinate = room.coordinate_id
         project.name = "New"
         room.name = "New"
@@ -395,7 +396,7 @@ extension SpatialTests {
         XCTAssertFalse(progress.canFinish)
     }
     func testRoomMapDoesNotRequireManualDotsOrMarkerAndOldRecordsStillDecode() throws {
-        var room = Room(project_id: UUID(), name: "Scanned room")
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Scanned room")
         room.map_path = "test.worldmap"
         try room.validate()
         let json = try JSONEncoder().encode(room)
@@ -475,7 +476,7 @@ extension SpatialTests {
 
 extension SpatialTests {
     func testTypedLabelLengthMatchesCloudLimit() throws {
-        let room = Room(project_id: UUID(), name: "Room")
+        let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
         var note = Annotation(
             room: room, kind: .text, pose: .identity, title: String(repeating: "a", count: 240), detail: "")
         try note.validate(room: room)
@@ -520,7 +521,7 @@ extension SpatialTests {
         XCTAssertFalse(curve.contains(controls[1]))  // The hard right-angle corner is rounded.
     }
     func testSeparateStrokeAndImageMetadataRoundTripAndLegacyCompatibility() throws {
-        let room = Room(project_id: UUID(), name: "Room")
+        let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
         let a = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(1, 0, 0))]
         let b = [Point3(SIMD3<Float>(5, 5, 0)), Point3(SIMD3(6, 5, 0))]
         var drawing = Annotation(room: room, kind: .line, pose: .identity, points: a, title: "Zeichnung", detail: "")

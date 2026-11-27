@@ -13,7 +13,7 @@ final class ScanGuidePersistenceTests: XCTestCase {
     private let otherGuide = Data([0xff, 0xd8, 0x22, 0xff, 0xd9]).base64EncodedString()
 
     func testLegacyRoomDecodesWithoutGuideAndGuideRoundTripsWithCoordinates() throws {
-        var room = Room(project_id: UUID(), name: "Legacy room")
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Legacy room")
         let oldData = try JSONEncoder().encode(room)
         let oldObject = try XCTUnwrap(JSONSerialization.jsonObject(with: oldData) as? [String: Any])
         XCTAssertNil(oldObject["scan_guide_jpeg"])
@@ -31,7 +31,7 @@ final class ScanGuidePersistenceTests: XCTestCase {
     }
 
     func testGuideRejectsMalformedNoncanonicalBase64AndNonJPEGFraming() throws {
-        var room = Room(project_id: UUID(), name: "Validation")
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Validation")
         let invalid = [
             "", "not base64!", guide + "\n", "/9j/2R==",
             Data([0xff, 0xd8, 0xff]).base64EncodedString(),
@@ -47,7 +47,7 @@ final class ScanGuidePersistenceTests: XCTestCase {
     }
 
     func testGuideDecodedByteLimitIncludesExactBoundary() throws {
-        var room = Room(project_id: UUID(), name: "Bounds")
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Bounds")
         var maximum = Data([0xff, 0xd8])
         maximum.append(Data(repeating: 0, count: 65_532))
         maximum.append(contentsOf: [0xff, 0xd9])
@@ -68,7 +68,7 @@ final class ScanGuidePersistenceTests: XCTestCase {
         var transaction = MapSaveTransaction()
         let generation = transaction.generation
         let map = Data([1, 2, 3])
-        var room = Room(project_id: UUID(), name: "Saved room")
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Saved room")
         room.map_path = "project/room/map.worldmap"
         room.scan_guide_jpeg = guide
         try transaction.capture(map, generation: generation, guide: guide)
@@ -92,32 +92,5 @@ final class ScanGuidePersistenceTests: XCTestCase {
         XCTAssertNil(transaction.guide)
         try transaction.capture(map, generation: transaction.generation)
         XCTAssertNil(transaction.guide)
-    }
-
-    func testProjectArchiveCarriesGuideWithoutChangingRoomCoordinates() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let project = Project(owner_id: UUID(), name: "Guide transfer")
-        var room = Room(project_id: project.id, name: "Mapped room")
-        room.scan_guide_jpeg = guide
-        room.map_path = "\(project.id.uuidString)/\(room.id.uuidString)/map.worldmap"
-        let mapURL = root.appendingPathComponent(room.map_path!)
-        try FileManager.default.createDirectory(
-            at: mapURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let bytes = Data("Synthetic map fixture for transfer testing only".utf8)
-        try bytes.write(to: mapURL)
-        let task = Annotation(room: room, kind: .text, pose: .identity, title: "Saved pose", detail: "")
-        let archive = root.appendingPathComponent("guide.sitescope")
-        try ProjectTransferArchive.write(
-            project: project, rooms: [room], annotations: [task], assetRoot: root, to: archive)
-        let extracted = root.appendingPathComponent("extracted")
-        let manifest = try ProjectTransferArchive.read(from: archive, extractTo: extracted)
-        XCTAssertEqual(manifest.rooms, [room])
-        XCTAssertEqual(manifest.rooms.first?.scan_guide_jpeg, guide)
-        XCTAssertEqual(manifest.rooms.first?.coordinate_id, room.coordinate_id)
-        XCTAssertEqual(manifest.annotations, [task])
-        XCTAssertEqual(manifest.assets.count, 1)  // The guide is bounded metadata, not a separate marker asset.
-        XCTAssertEqual(try Data(contentsOf: extracted.appendingPathComponent(room.map_path!)), bytes)
     }
 }

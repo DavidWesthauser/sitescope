@@ -24,7 +24,7 @@ final class MapSaveTransactionTests: XCTestCase {
         }
     }
     private func room() -> Room {
-        var room = Room(project_id: UUID(), name: "Kitchen")
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Kitchen")
         room.map_path = "project/room/immutable.worldmap"
         return room
     }

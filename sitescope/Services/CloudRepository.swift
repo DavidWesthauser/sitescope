@@ -1,108 +1,134 @@
 import Foundation
 
-/// Supabase storage (docs/DATABASE_API.md). Knows the table, RPC and bucket names; access rules are enforced by RLS
-/// on the server. Row shapes that differ from the app's models are in `CloudRecords.swift`.
-@MainActor final class CloudRepository: DataRepository, ProjectSharing {
+/// Supabase storage for the design in docs/DATABASE_API.md. Knows the table and RPC names; every right is enforced
+/// by RLS and triggers on the server. The design has no tables for AR scans and instructions yet (T-029), so those
+/// calls report that instead of failing with a server error.
+@MainActor final class CloudRepository: DataRepository, AccessManagement {
     private let backend: Backend
     init(backend: Backend) { self.backend = backend }
 
     var userID: UUID? { backend.user?.id }
 
+    // MARK: Projects, houses, rooms
+
+    /// RLS returns only what the user may see, including projects they only navigate through.
     func loadProjects() async throws -> [Project] {
-        let values: [CloudProject] = try await backend.list("projects", query: "&order=name")
-        return values.map(\.project)
+        try await backend.list("projects", query: "&order=name")
     }
-    func loadRooms(of project: Project) async throws -> [Room] {
-        try await backend.list("rooms", query: "&project_id=eq.\(project.id)&order=name")
+    func loadHouses(of project: Project) async throws -> [House] {
+        try await backend.list("houses", query: "&project_id=eq.\(project.id)&order=name")
+    }
+    func loadRooms(of house: House) async throws -> [Room] {
+        try await backend.list("rooms", query: "&house_id=eq.\(house.id)&order=name")
     }
     func loadRoom(id: UUID) async throws -> Room {
         let values: [Room] = try await backend.list("rooms", query: "&id=eq.\(id)")
         guard let room = values.first else { throw AppError.message("Room no longer exists or access was removed.") }
         return room
     }
-    /// Server data is checked before it reaches the AR scene.
-    func loadAnnotations(of room: Room) async throws -> [Annotation] {
-        let values: [Annotation] = try await backend.list("annotations", query: "&room_id=eq.\(room.id)&order=title")
-        try room.validate()
-        for value in values { try value.validate(room: room) }
-        return values
-    }
 
-    /// The creator becomes responsible on the server. The project gets its first house right away.
+    /// The creator becomes responsible (trigger `set_creator`).
     func createProject(_ project: Project) async throws {
-        try await backend.insert("projects", value: NewCloudProject(id: project.id, name: project.name))
-        try await backend.insert(
-            "houses", value: CloudHouse(id: UUID(), project_id: project.id, name: CloudHouse.defaultName))
+        try await backend.insert("projects", value: NewProject(id: project.id, name: project.name))
     }
     func renameProject(_ project: Project, to name: String) async throws {
         try await backend.update("projects", id: project.id, value: ["name": name])
     }
     func deleteProject(_ project: Project) async throws { try await backend.delete("projects", id: project.id) }
 
-    func createRoom(_ room: Room) async throws {
-        try await backend.insert("rooms", value: NewCloudRoom(room: room, house_id: try await houseID(of: room)))
+    func createHouse(_ house: House) async throws {
+        try await backend.insert(
+            "houses", value: NewHouse(id: house.id, project_id: house.project_id, name: house.name))
     }
-    /// The house that holds a project's rooms until houses get their own screens (T-005): the oldest one, or a new
-    /// default house when the project has none (only the person responsible may create it).
-    private func houseID(of room: Room) async throws -> UUID {
-        let houses: [CloudHouse] = try await backend.list(
-            "houses", query: "&project_id=eq.\(room.project_id)&order=created_at&limit=1")
-        if let house = houses.first { return house.id }
-        let house = CloudHouse(id: UUID(), project_id: room.project_id, name: CloudHouse.defaultName)
-        try await backend.insert("houses", value: house)
-        return house.id
+    func renameHouse(_ house: House, to name: String) async throws {
+        try await backend.update("houses", id: house.id, value: ["name": name])
     }
+    func deleteHouse(_ house: House) async throws { try await backend.delete("houses", id: house.id) }
+
+    func createRoom(_ room: Room) async throws { try await backend.insert("rooms", value: NewRoom(room: room)) }
     func renameRoom(_ room: Room, to name: String) async throws {
         try await backend.update("rooms", id: room.id, value: ["name": name])
     }
+    func updateRoomDetails(_ room: Room) async throws {
+        try await backend.update("rooms", id: room.id, value: RoomDetailsUpdate(room: room))
+    }
     func deleteRoom(_ room: Room) async throws { try await backend.delete("rooms", id: room.id) }
-    func publishRoom(_ room: Room) async throws {
-        try room.validate()
-        try await backend.update("rooms", id: room.id, value: RoomMapUpdate(room: room))
+
+    // MARK: AR data (no tables yet, T-029)
+
+    private var arUnavailable: AppError {
+        AppError.message("Saving scans and instructions in the cloud is not available yet (T-029).")
+    }
+    func loadAnnotations(of room: Room) async throws -> [Annotation] { [] }
+    func publishRoom(_ room: Room) async throws { throw arUnavailable }
+    func saveTask(_ item: Annotation, in room: Room, canEdit: Bool) async throws { throw arUnavailable }
+    func saveInstruction(_ item: Annotation, in room: Room, replacing: Bool) async throws { throw arUnavailable }
+    func deleteTask(_ item: Annotation) async throws { throw arUnavailable }
+    func downloadAsset(path: String) async throws -> Data { throw arUnavailable }
+    func uploadAsset(path: String, data: Data, type: String) async throws { throw arUnavailable }
+
+    // MARK: Rights
+
+    func level(on scope: AccessScope) async throws -> AccessLevel {
+        let value = try await backend.rpc("scope_level", body: ScopeArguments(scope: scope), returning: Int.self)
+        return AccessLevel(serverValue: value)
+    }
+    func isAdmin() async throws -> Bool {
+        try await backend.rpc("is_admin", body: [String: String](), returning: Bool.self)
     }
 
-    /// Workers have no update right on `annotations`; they change the status through the `set_task_status` RPC.
-    func saveTask(_ item: Annotation, in room: Room, asManager: Bool) async throws {
-        try item.validate(room: room)
-        if asManager {
-            try await backend.update("annotations", id: item.id, value: AnnotationUpdate(item: item))
-        } else {
-            try await backend.rpc(
-                "set_task_status", arguments: ["task": item.id.uuidString, "new_status": item.status.rawValue])
-        }
-    }
-    func saveInstruction(_ item: Annotation, in room: Room, replacing: Bool) async throws {
-        try RecordRules.checkInstruction(item, in: room)
-        if replacing {
-            try await backend.update("annotations", id: item.id, value: AnnotationUpdate(item: item))
-        } else {
-            try await backend.insert("annotations", value: item)
-        }
-    }
-    func deleteTask(_ item: Annotation) async throws { try await backend.delete("annotations", id: item.id) }
-
-    func downloadAsset(path: String) async throws -> Data { try await backend.download(path: path) }
-    func uploadAsset(path: String, data: Data, type: String) async throws {
-        try await backend.upload(path: path, data: data, type: type)
-    }
-
-    // MARK: ProjectSharing
-
-    /// Grants on the whole project; grants on single houses or rooms come with T-006. `access_grants` has two foreign
-    /// keys to `profiles`, so the embed names the constraint.
-    func members(of project: Project) async throws -> [Membership] {
-        try await backend.list(
+    /// `access_grants` has two foreign keys to `profiles`, so the embed names the constraint.
+    func grants(on scope: AccessScope) async throws -> [AccessGrant] {
+        let house = scope.houseID.map { "eq.\($0)" } ?? "is.null"
+        let room = scope.roomID.map { "eq.\($0)" } ?? "is.null"
+        return try await backend.list(
             "access_grants", select: "*,user:profiles!access_grants_user_id_fkey(display_name)",
-            query: "&project_id=eq.\(project.id)&house_id=is.null&room_id=is.null&order=created_at")
+            query: "&project_id=eq.\(scope.project.id)&house_id=\(house)&room_id=\(room)&order=created_at")
     }
-    /// The app's worker is the role `external`: reads everything in the project and changes task status.
-    func share(_ project: Project, withEmail email: String) async throws {
+    func grant(_ role: AccessRole, on scope: AccessScope, toEmail email: String) async throws {
         let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !address.isEmpty else { throw AppError.message("Enter the worker's email.") }
-        try await backend.rpc(
-            "grant_access", arguments: ["target_email": address, "new_role": "external", "p": project.id.uuidString])
+        guard !address.isEmpty else { throw AppError.message("Enter the person's email.") }
+        try await backend.rpc("grant_access", body: GrantArguments(email: address, role: role, scope: scope))
     }
-    func revoke(_ member: Membership, from project: Project) async throws {
-        try await backend.rpc("revoke_access", arguments: ["grant_id": member.id.uuidString])
+    func revoke(_ grant: AccessGrant) async throws {
+        try await backend.rpc("revoke_access", arguments: ["grant_id": grant.id.uuidString])
+    }
+    func setResponsible(_ person: UUID, of scope: AccessScope) async throws {
+        let update = ResponsibleUpdate(responsible_id: person)
+        switch scope {
+        case .project(let project): try await backend.update("projects", id: project.id, value: update)
+        case .house(_, let house): try await backend.update("houses", id: house.id, value: update)
+        case .room(_, _, let room): try await backend.update("rooms", id: room.id, value: update)
+        }
+    }
+
+    // MARK: People and organizations
+
+    func profiles() async throws -> [Profile] {
+        try await backend.list("profiles", query: "&order=display_name")
+    }
+    func setDisplayName(_ name: String, of profile: Profile) async throws {
+        try await backend.update("profiles", key: "user_id", id: profile.user_id, value: ["display_name": name])
+    }
+    func setActive(_ active: Bool, of profile: Profile) async throws {
+        try await backend.update("profiles", key: "user_id", id: profile.user_id, value: ["is_active": active])
+    }
+    func setOrganization(_ organization: UUID?, of profile: Profile) async throws {
+        try await backend.update(
+            "profiles", key: "user_id", id: profile.user_id,
+            value: OrganizationAssignment(organization_id: organization))
+    }
+    func organizations() async throws -> [Organization] {
+        try await backend.list("organizations", query: "&order=name")
+    }
+    func saveOrganization(_ organization: Organization, isNew: Bool) async throws {
+        if isNew {
+            try await backend.insert(
+                "organizations", value: OrganizationRecord(organization: organization, includesID: true))
+        } else {
+            try await backend.update(
+                "organizations", id: organization.id,
+                value: OrganizationRecord(organization: organization, includesID: false))
+        }
     }
 }

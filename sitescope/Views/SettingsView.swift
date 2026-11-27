@@ -1,43 +1,39 @@
 import SwiftUI
 
-/// App settings: appearance, account or local-mode status, scanning tips and app version.
+/// App settings: your name and account, administration for admins, appearance, scanning tips and app version.
 struct SettingsView: View {
     @EnvironmentObject var store: Store
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
+    @State private var nameDraft = ""
     var body: some View {
         Form {
+            if let me = store.myProfile {
+                NameSection(
+                    placeholder: "Your name", stored: me.display_name, identifier: "settings.displayName",
+                    draft: $nameDraft, save: { name in store.run { try await store.setDisplayName(name) } }
+                )
+                .onAppear { nameDraft = me.display_name }
+            }
+            Section {
+                LabeledContent("Email", value: store.accountEmail ?? "–")
+                if store.isAdmin {
+                    NavigationLink {
+                        AdministrationView()
+                    } label: {
+                        Label("Administration", systemImage: "person.badge.key")
+                    }.accessibilityIdentifier("settings.admin")
+                }
+            } header: {
+                Text("Account")
+            } footer: {
+                Text(store.isAdmin ? "You are an administrator." : "Others see your name on projects you are part of.")
+            }
             Section {
                 Picker("Appearance", selection: $appearance) {
                     ForEach(AppearancePreference.allCases) { Text($0.label).tag($0) }
                 }.accessibilityIdentifier("settings.appearance")
             } footer: {
                 Text("System follows the Light or Dark setting of your iPhone.")
-            }
-            if store.isLocalMode {
-                Section {
-                    Text("No account connected")
-                    if store.hasBackend {
-                        Button("Sign In or Create Account") { store.showSignIn() }
-                            .accessibilityIdentifier("settings.signIn")
-                    }
-                } header: {
-                    Text("On this device")
-                } footer: {
-                    Text(
-                        !store.hasBackend
-                            ? "Your projects, room maps and instructions are saved on this device."
-                            : "Your projects, room maps and instructions are saved on this device and stay here when you sign in. Projects in your account are shared with the people you invite."
-                    )
-                }
-            } else {
-                Section("Account") {
-                    Text(store.accountEmail ?? "Signed in")
-                }
-                Section {
-                    Button("Sign Out", role: .destructive) {
-                        store.run { await store.signOut() }
-                    }
-                }
             }
             Section {
                 NavigationLink {
@@ -52,8 +48,16 @@ struct SettingsView: View {
                 Text("About sitescope")
             } footer: {
                 Text(
-                    "Spatial work instructions for iOS 17 and later. Room recognition uses camera features from the saved scan. Lighting and texture affect accuracy. Check drawings against the physical room before work. Exported project files include room maps and images."
+                    "Spatial work instructions for iOS 17 and later. Room recognition uses camera features from the saved scan. Lighting and texture affect accuracy. Check drawings against the physical room before work."
                 )
+            }
+            // HIG: the destructive action sits alone in the last section.
+            Section {
+                Button("Sign Out", role: .destructive) {
+                    store.run { await store.signOut() }
+                }.accessibilityIdentifier("settings.signOut")
+            } footer: {
+                Text("You need to sign in again to use sitescope.")
             }
         }.navigationTitle("Settings")
     }

@@ -16,11 +16,9 @@
             }
         }
         func testScreenStatesAtCompactSizesAndLargeText() async throws {
-            let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            defer { try? FileManager.default.removeItem(at: folder) }
-            let store = Store(localURL: folder.appendingPathComponent("local.json"))
-            let project = Project(owner_id: store.userID!, name: "Layout fixture")
-            var room = Room(project_id: project.id, name: "Ein langer Raumname für die Layoutprüfung")
+            let store = Store(repository: InMemoryRepository())
+            let project = Project(name: "Layout fixture")
+            var room = Room(project_id: project.id, house_id: UUID(), name: "Ein langer Raumname für die Layoutprüfung")
             room.map_path = "test-only.worldmap"
             room.scan_guide_jpeg = sampleImage().jpegData(compressionQuality: 0.5)?.base64EncodedString()
             let patch = SurfacePatch(
@@ -154,6 +152,9 @@
             active.priority = 2
             active.title = "High priority instruction"
             store.annotations = [note, complete, active]
+            let house = House(id: room.house_id, project_id: project.id, name: "Haus A")
+            store.houses = [house]
+            store.rooms = [room]
             try await snapshot(
                 AnyView(ProjectDashboard()), store: store, name: "populated-projects",
                 size: CGSize(width: 375, height: 667))
@@ -161,11 +162,15 @@
                 AnyView(NavigationStack { ProjectDetail(project: project) }), store: store, name: "project-rooms",
                 size: CGSize(width: 375, height: 667))
             try await snapshot(
-                AnyView(NavigationStack { RoomDetail(project: project, initialRoom: room) }), store: store,
+                AnyView(NavigationStack { HouseDetail(project: project, house: house) }), store: store,
+                name: "house-rooms", size: CGSize(width: 375, height: 667))
+            try await snapshot(
+                AnyView(NavigationStack { RoomDetail(project: project, house: house, initialRoom: room) }),
+                store: store,
                 name: "room-progress", size: CGSize(width: 375, height: 667))
             try await snapshot(
                 AnyView(
-                    NavigationStack { RoomDetail(project: project, initialRoom: room) }.environment(
+                    NavigationStack { RoomDetail(project: project, house: house, initialRoom: room) }.environment(
                         \.dynamicTypeSize, .accessibility1)), store: store, name: "room-progress-large-text",
                 size: CGSize(width: 375, height: 667))
             try await snapshot(
@@ -173,7 +178,7 @@
                 size: CGSize(width: 375, height: 667))
         }
         func testFinishingAScanIsNotReportedAsRecognition() {
-            var room = Room(project_id: UUID(), name: "Fresh scan fixture")
+            var room = Room(project_id: UUID(), house_id: UUID(), name: "Fresh scan fixture")
             let ar = ARController(room: room, mode: .mapping)
             XCTAssertFalse(ar.scannedThisSession)
             room.map_path = "test-only.worldmap"
@@ -183,7 +188,7 @@
             ar.stop()
         }
         func testTrackingLossEndsAnActiveStrokeWithoutDiscardingRoomData() {
-            let room = Room(project_id: UUID(), name: "Tracking fixture")
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Tracking fixture")
             let ar = ARController(room: room, mode: .editing)
             let item = Annotation(
                 room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(1, 0, 0))],
@@ -203,10 +208,8 @@
             ar.stop()
         }
         func testFailedOrSupersededImageRestoreCannotUseAnOlderDraft() async throws {
-            let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            defer { try? FileManager.default.removeItem(at: folder) }
-            let store = Store(localURL: folder.appendingPathComponent("local.json"))
-            let room = Room(project_id: UUID(), name: "Image fixture")
+            let store = Store(repository: InMemoryRepository())
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Image fixture")
             let ar = ARController(room: room, mode: .editing)
             let data = try XCTUnwrap(sampleImage().pngData())
             try await ar.setImage(data)
@@ -237,10 +240,8 @@
             ar.stop()
         }
         func testImageReloadPrunesOldTexturesAndCannotRenderAfterStop() async throws {
-            let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            defer { try? FileManager.default.removeItem(at: folder) }
-            let store = Store(localURL: folder.appendingPathComponent("local.json"))
-            let room = Room(project_id: UUID(), name: "Texture fixture")
+            let store = Store(repository: InMemoryRepository())
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Texture fixture")
             let data = try XCTUnwrap(sampleImage().pngData())
             var items: [Annotation] = []
             for index in 0..<2 {
@@ -266,7 +267,7 @@
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
         }
         func testLongScanRenderingAndMemoryFallbackStayBounded() throws {
-            let room = Room(project_id: UUID(), name: "Long scan fixture")
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Long scan fixture")
             let ar = ARController(room: room, mode: .mapping)
             ar.trackingNormal = true
             let vertices = (0..<256).map { i -> Point3 in
@@ -333,7 +334,7 @@
             XCTAssertGreaterThan(count, 1000, "Observed geometry must be visible before any animation tick")
         }
         func testLostTrackingAndInvalidRefinementDiscardPlacementEvidence() throws {
-            let room = Room(project_id: UUID(), name: "Placement recovery fixture")
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Placement recovery fixture")
             let ar = ARController(room: room, mode: .mapping)
             ar.updateTracking(.none)
             var patch = SurfacePatch(
@@ -357,7 +358,7 @@
             ar.stop()
         }
         func testRemovingSavedRoomAnchorHidesInstructions() {
-            let room = Room(project_id: UUID(), name: "Anchor loss fixture")
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Anchor loss fixture")
             let ar = ARController(room: room, mode: .walkthrough)
             ar.updateTracking(.none)
             ar.annotations = [
@@ -374,7 +375,7 @@
             ar.stop()
         }
         func testSurfaceOutlineKeepsAnchorAcrossRefinements() async throws {
-            let room = Room(project_id: UUID(), name: "Test-only scan renderer")
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Test-only scan renderer")
             let ar = ARController(room: room, mode: .mapping)
             ar.trackingNormal = true
             var patch = SurfacePatch(
@@ -407,10 +408,8 @@
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
         }
         func testImageTexturesStayWithinBudgetAndOverflowShowsOutlines() async throws {
-            let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            defer { try? FileManager.default.removeItem(at: folder) }
-            let store = Store(localURL: folder.appendingPathComponent("local.json"))
-            let room = Room(project_id: UUID(), name: "Texture budget fixture")
+            let store = Store(repository: InMemoryRepository())
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Texture budget fixture")
             let data = try XCTUnwrap(sampleImage().pngData())
             let total = ARController.maximumImageTextures + 3
             var items: [Annotation] = []
@@ -437,7 +436,7 @@
             ar.stop()
         }
         func testRecoveredDrawingsReuseTheirBuiltScene() throws {
-            let room = Room(project_id: UUID(), name: "Render cache fixture")
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Render cache fixture")
             let ar = ARController(room: room, mode: .walkthrough)
             ar.updateTracking(.none)
             ar.annotations = [
@@ -461,7 +460,7 @@
             ar.stop()
         }
         func testOutlineRefinementsAreSpreadAcrossTicks() throws {
-            let room = Room(project_id: UUID(), name: "Refinement budget fixture")
+            let room = Room(project_id: UUID(), house_id: UUID(), name: "Refinement budget fixture")
             let ar = ARController(room: room, mode: .mapping)
             ar.trackingNormal = true
             func square(_ size: Float) -> [Point3] {
@@ -494,13 +493,13 @@
             ar.stop()
         }
         func testSmoothSeparatedStrokeAndImageRendering() async throws {
-            let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            defer { try? FileManager.default.removeItem(at: folder) }
-            let url = folder.appendingPathComponent("local.json")
-            let store = Store(localURL: url)
+            let repository = InMemoryRepository()
+            let store = Store(repository: repository)
             try await store.createProject(name: "Storage fixture")
             let project = try XCTUnwrap(store.projects.first)
-            try await store.createRoom(in: project, name: "Rendering fixture")
+            try await store.createHouse(in: project, name: "House fixture")
+            let house = try XCTUnwrap(store.houses.first)
+            try await store.createRoom(in: house, name: "Rendering fixture")
             var room = try XCTUnwrap(store.rooms.first)
             room.map_path = "test-only.worldmap"
             try await store.requireRepository().publishRoom(room)
@@ -520,7 +519,9 @@
             image.image = SpatialImage(path: path, width: 0.4, height: 0.25)
             try await store.saveInstruction(image, room: room, replacing: false)
             try await store.saveInstruction(drawing, room: room, replacing: false)
-            let reopened = Store(localURL: url)
+            // A second store on the same storage sees what the first one saved.
+            let reopened = Store(repository: repository)
+            try await reopened.loadAnnotations(room)
             XCTAssertEqual(reopened.annotations.first(where: { $0.id == image.id }), image)
             XCTAssertEqual(reopened.annotations.first(where: { $0.id == drawing.id })?.strokes?.count, 2)
             let restoredBytes = try await reopened.requireRepository().downloadAsset(path: path)

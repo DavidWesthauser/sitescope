@@ -1,75 +1,98 @@
 import Foundation
 
-/// Row shapes of the Supabase tables (docs/DATABASE_API.md) and how they map to the app's models.
-/// The `Core` models stay as they are, because `local.json` and `.sitescope` files persist them.
-/// Writes send only the columns the database lets clients set; ids, authors and timestamps are fixed after insert.
+/// Request bodies for the Supabase tables and RPCs in docs/DATABASE_API.md. Writes send only the columns clients
+/// may set ("Updatable columns"); the creator, timestamps and organizations are set by the server.
+/// Optional values are sent as `null`, never left out, so clearing a field works and RPCs get every argument.
 
-/// `projects` row. The app's `owner_id` is the project's responsible person.
-struct CloudProject: Decodable {
-    let id: UUID
-    let name: String
-    let responsible_id: UUID
-    var project: Project { Project(id: id, owner_id: responsible_id, name: name) }
-}
-
-struct NewCloudProject: Encodable {
+struct NewProject: Encodable {
     let id: UUID
     let name: String
 }
 
-/// `houses` row. The app has no house screens yet (T-005); each project gets one house that holds its rooms.
-struct CloudHouse: Codable {
+struct NewHouse: Encodable {
     let id: UUID
     let project_id: UUID
     let name: String
-    static let defaultName = "Main building"
 }
 
-/// A new room: the app's room plus the house it belongs to.
-struct NewCloudRoom: Encodable {
+struct NewRoom: Encodable {
     let room: Room
-    let house_id: UUID
-    private enum Keys: String, CodingKey { case house_id }
+    private enum Keys: String, CodingKey { case id, house_id, project_id, name, height, length, width, status }
     func encode(to encoder: Encoder) throws {
-        try room.encode(to: encoder)
-        var container = encoder.container(keyedBy: Keys.self)
-        try container.encode(house_id, forKey: .house_id)
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(room.id, forKey: .id)
+        try c.encode(room.house_id, forKey: .house_id)
+        try c.encode(room.project_id, forKey: .project_id)
+        try c.encode(room.name, forKey: .name)
+        try c.encode(room.height, forKey: .height)
+        try c.encode(room.length, forKey: .length)
+        try c.encode(room.width, forKey: .width)
+        try c.encode(room.status, forKey: .status)
     }
 }
 
-/// The scan data written when a room map is published. Optionals are sent as `null`, never left out,
-/// so the stored row always matches the room.
-struct RoomMapUpdate: Encodable {
+/// Room fields a member may change (level ≥ 2): name, dimensions, status.
+struct RoomDetailsUpdate: Encodable {
     let room: Room
-    private enum Keys: String, CodingKey {
-        case spatial_version, map_path, scan_guide_jpeg, marker, reference_points, reference_notes, surfaces
-    }
+    private enum Keys: String, CodingKey { case name, height, length, width, status }
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Keys.self)
-        try container.encode(room.spatial_version, forKey: .spatial_version)
-        try container.encode(room.map_path, forKey: .map_path)
-        try container.encode(room.scan_guide_jpeg, forKey: .scan_guide_jpeg)
-        try container.encode(room.marker, forKey: .marker)
-        try container.encode(room.reference_points, forKey: .reference_points)
-        try container.encode(room.reference_notes, forKey: .reference_notes)
-        try container.encode(room.surfaces, forKey: .surfaces)
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(room.name, forKey: .name)
+        try c.encode(room.height, forKey: .height)
+        try c.encode(room.length, forKey: .length)
+        try c.encode(room.width, forKey: .width)
+        try c.encode(room.status, forKey: .status)
     }
 }
 
-/// The editable content of a note. Its room and coordinate system are fixed after insert.
-struct AnnotationUpdate: Encodable {
-    let item: Annotation
-    private enum Keys: String, CodingKey { case kind, pose, points, strokes, image, title, detail, status, priority }
+struct ResponsibleUpdate: Encodable {
+    let responsible_id: UUID
+}
+
+/// `p`, `h`, `r` of `scope_level` and `grant_access`; the design gives `scope_level` no defaults.
+struct ScopeArguments: Encodable {
+    let scope: AccessScope
+    private enum Keys: String, CodingKey { case p, h, r }
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Keys.self)
-        try container.encode(item.kind, forKey: .kind)
-        try container.encode(item.pose, forKey: .pose)
-        try container.encode(item.points, forKey: .points)
-        try container.encode(item.strokes, forKey: .strokes)
-        try container.encode(item.image, forKey: .image)
-        try container.encode(item.title, forKey: .title)
-        try container.encode(item.detail, forKey: .detail)
-        try container.encode(item.status, forKey: .status)
-        try container.encode(item.priority, forKey: .priority)
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(scope.project.id, forKey: .p)
+        try c.encode(scope.houseID, forKey: .h)
+        try c.encode(scope.roomID, forKey: .r)
+    }
+}
+
+struct GrantArguments: Encodable {
+    let email: String
+    let role: AccessRole
+    let scope: AccessScope
+    private enum Keys: String, CodingKey { case target_email, new_role }
+    func encode(to encoder: Encoder) throws {
+        try ScopeArguments(scope: scope).encode(to: encoder)
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(email, forKey: .target_email)
+        try c.encode(role, forKey: .new_role)
+    }
+}
+
+/// The columns of an organization an admin sets; the id only on insert.
+struct OrganizationRecord: Encodable {
+    let organization: Organization
+    let includesID: Bool
+    private enum Keys: String, CodingKey { case id, name, status, responsible_id }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Keys.self)
+        if includesID { try c.encode(organization.id, forKey: .id) }
+        try c.encode(organization.name, forKey: .name)
+        try c.encode(organization.status, forKey: .status)
+        try c.encode(organization.responsible_id, forKey: .responsible_id)
+    }
+}
+
+struct OrganizationAssignment: Encodable {
+    let organization_id: UUID?
+    private enum Keys: String, CodingKey { case organization_id }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(organization_id, forKey: .organization_id)
     }
 }

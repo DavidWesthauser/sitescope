@@ -19,7 +19,11 @@ struct Configuration {
             let url = URL(string: raw), url.scheme == "https", url.host != nil,
             let key = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String,
             !key.isEmpty, !key.contains("YOUR_")
-        else { throw AppError.message("Configure SUPABASE_URL and SUPABASE_ANON_KEY in Config.xcconfig. See README.") }
+        else {
+            throw AppError.message(
+                "No server is configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to Secrets.xcconfig (docs/BACKEND_SETUP.md)."
+            )
+        }
         return Configuration(url: url, key: key)
     }
 }
@@ -114,10 +118,11 @@ struct Configuration {
             "/rest/v1/\(table)", method: "POST", body: JSONEncoder().encode(value), token: access,
             prefer: "return=minimal")
     }
-    func update<T: Encodable>(_ table: String, id: UUID, value: T) async throws {
+    /// `key` is the primary key column; `profiles` uses `user_id`.
+    func update<T: Encodable>(_ table: String, key: String = "id", id: UUID, value: T) async throws {
         let access = try await token()
         let data = try await raw(
-            "/rest/v1/\(table)?id=eq.\(id)", method: "PATCH", body: JSONEncoder().encode(value), token: access,
+            "/rest/v1/\(table)?\(key)=eq.\(id)", method: "PATCH", body: JSONEncoder().encode(value), token: access,
             prefer: "return=representation")
         guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]], !rows.isEmpty else {
             throw AppError.message("No record was updated. Your access may have changed; refresh.")
@@ -132,10 +137,20 @@ struct Configuration {
         }
     }
     func rpc(_ name: String, arguments: [String: String]) async throws {
+        try await rpc(name, body: arguments)
+    }
+    func rpc<Body: Encodable>(_ name: String, body: Body) async throws {
         let access = try await token()
-        _ = try await raw(
-            "/rest/v1/rpc/\(name)", method: "POST", body: JSONSerialization.data(withJSONObject: arguments),
-            token: access)
+        _ = try await raw("/rest/v1/rpc/\(name)", method: "POST", body: JSONEncoder().encode(body), token: access)
+    }
+    /// An RPC that returns a value, such as `scope_level` (a number) or `is_admin` (a boolean).
+    func rpc<Body: Encodable, Result: Decodable>(_ name: String, body: Body, returning: Result.Type) async throws
+        -> Result
+    {
+        let access = try await token()
+        let data = try await raw(
+            "/rest/v1/rpc/\(name)", method: "POST", body: JSONEncoder().encode(body), token: access)
+        return try JSONDecoder().decode(Result.self, from: data)
     }
     func upload(path: String, data: Data, type: String) async throws {
         let access = try await token()

@@ -1,13 +1,28 @@
 import Foundation
 
+/// A `projects` row. Fields mirror the database columns (docs/DATABASE_API.md); the server sets the rest.
 public struct Project: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
-    public var owner_id: UUID
     public var name: String
-    public init(id: UUID = UUID(), owner_id: UUID, name: String) {
+    /// The person responsible (access level 3). The creator by default.
+    public var responsible_id: UUID?
+    public init(id: UUID = UUID(), name: String, responsible_id: UUID? = nil) {
         self.id = id
-        self.owner_id = owner_id
         self.name = name
+        self.responsible_id = responsible_id
+    }
+}
+/// A `houses` row: a building of a project that holds rooms.
+public struct House: Codable, Identifiable, Equatable, Sendable {
+    public var id: UUID
+    public var project_id: UUID
+    public var name: String
+    public var responsible_id: UUID?
+    public init(id: UUID = UUID(), project_id: UUID, name: String, responsible_id: UUID? = nil) {
+        self.id = id
+        self.project_id = project_id
+        self.name = name
+        self.responsible_id = responsible_id
     }
 }
 /// Printed marker used to recover room alignment; width and height are in metres.
@@ -25,10 +40,35 @@ public struct Marker: Codable, Equatable, Sendable {
         self.room_from_marker = room_from_marker
     }
 }
+/// Building progress of a room (`rooms.status`).
+public enum RoomStatus: String, Codable, CaseIterable, Identifiable, Sendable {
+    case planned
+    case inProgress = "in_progress"
+    case built
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .planned: return "Planned"
+        case .inProgress: return "In progress"
+        case .built: return "Built"
+        }
+    }
+}
+/// A `rooms` row plus the AR data the app keeps for scanning. The AR fields have no database columns yet (T-029):
+/// they are optional when decoding and never sent to the server.
 public struct Room: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var project_id: UUID
+    public var house_id: UUID
     public var name: String
+    /// Metres; the database rounds to centimetres.
+    public var height: Double?
+    public var length: Double?
+    public var width: Double?
+    /// `length * width`, computed by the database.
+    public var area: Double?
+    public var status: RoomStatus = .planned
+    public var responsible_id: UUID?
     public var spatial_version: Int = 1
     public var coordinate_id: UUID = UUID()
     public var map_path: String?
@@ -38,10 +78,38 @@ public struct Room: Codable, Identifiable, Equatable, Sendable {
     public var reference_points: [Point3] = []
     public var reference_notes: String = ""
     public var surfaces: [SurfacePatch]?
-    public init(id: UUID = UUID(), project_id: UUID, name: String) {
+    public init(id: UUID = UUID(), project_id: UUID, house_id: UUID, name: String) {
         self.id = id
         self.project_id = project_id
+        self.house_id = house_id
         self.name = name
+    }
+    private enum CodingKeys: String, CodingKey {
+        case id, project_id, house_id, name, height, length, width, area, status, responsible_id
+        case spatial_version, coordinate_id, map_path, scan_guide_jpeg, marker, reference_points, reference_notes
+        case surfaces
+    }
+    /// Database rows have no AR columns yet; missing ones keep their defaults.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        project_id = try c.decode(UUID.self, forKey: .project_id)
+        house_id = try c.decode(UUID.self, forKey: .house_id)
+        name = try c.decode(String.self, forKey: .name)
+        height = try c.decodeIfPresent(Double.self, forKey: .height)
+        length = try c.decodeIfPresent(Double.self, forKey: .length)
+        width = try c.decodeIfPresent(Double.self, forKey: .width)
+        area = try c.decodeIfPresent(Double.self, forKey: .area)
+        status = try c.decodeIfPresent(RoomStatus.self, forKey: .status) ?? .planned
+        responsible_id = try c.decodeIfPresent(UUID.self, forKey: .responsible_id)
+        spatial_version = try c.decodeIfPresent(Int.self, forKey: .spatial_version) ?? 1
+        coordinate_id = try c.decodeIfPresent(UUID.self, forKey: .coordinate_id) ?? id
+        map_path = try c.decodeIfPresent(String.self, forKey: .map_path)
+        scan_guide_jpeg = try c.decodeIfPresent(String.self, forKey: .scan_guide_jpeg)
+        marker = try c.decodeIfPresent(Marker.self, forKey: .marker)
+        reference_points = try c.decodeIfPresent([Point3].self, forKey: .reference_points) ?? []
+        reference_notes = try c.decodeIfPresent(String.self, forKey: .reference_notes) ?? ""
+        surfaces = try c.decodeIfPresent([SurfacePatch].self, forKey: .surfaces)
     }
     /// Rejects malformed or oversized records before they are stored or sent. The scan guide must be a
     /// strict base64 JPEG of at most 64 KiB (the 87_384-character cap is that size encoded).
@@ -194,14 +262,41 @@ public enum DisplayName {
         return text.isEmpty || text.count > maximumLength ? nil : text
     }
 }
-/// A person's access to a whole cloud project (`access_grants` row with the person's profile name).
-/// The app's "worker" has the role `external`.
-public struct Membership: Codable, Identifiable, Equatable, Sendable {
+/// An `access_grants` row with the person's profile name. Its scope is the most specific id that is set.
+public struct AccessGrant: Codable, Identifiable, Equatable, Sendable {
     public struct Person: Codable, Equatable, Sendable {
         public let display_name: String
     }
     public let id: UUID
     public let user_id: UUID
-    public let role: String
+    public let role: AccessRole
+    public let project_id: UUID
+    public let house_id: UUID?
+    public let room_id: UUID?
     public let user: Person?
+}
+/// `profiles` row, readable by every signed-in user. Users change only their `display_name`; admins change
+/// `organization_id` and `is_active`. Users are deactivated, never deleted.
+public struct Profile: Codable, Identifiable, Equatable, Sendable {
+    public let user_id: UUID
+    public var display_name: String
+    public var organization_id: UUID?
+    public var is_active: Bool
+    public var id: UUID { user_id }
+}
+/// `organizations` row; created and edited by admins only.
+public struct Organization: Codable, Identifiable, Equatable, Sendable {
+    public enum Status: String, Codable, CaseIterable, Sendable {
+        case active, inactive
+    }
+    public var id: UUID
+    public var name: String
+    public var status: Status
+    public var responsible_id: UUID?
+    public init(id: UUID = UUID(), name: String, status: Status = .active, responsible_id: UUID? = nil) {
+        self.id = id
+        self.name = name
+        self.status = status
+        self.responsible_id = responsible_id
+    }
 }
