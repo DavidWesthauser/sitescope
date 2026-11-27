@@ -215,7 +215,7 @@
             missing.image = SpatialImage(path: "missing/fixture.png", width: 0.4, height: 0.25)
             let restore = ar.beginImageRequest(clearExisting: true)
             do {
-                try await ar.restoreImageDraft(missing, store: store, request: restore)
+                try await ar.restoreImageDraft(missing, repository: store.requireRepository(), request: restore)
                 XCTFail("Missing image must fail")
             } catch {}
             XCTAssertNil(ar.imageData)
@@ -254,14 +254,14 @@
             ar.trackingNormal = true
             ar.localization.propose(.identity, method: .map)
             ar.confirm()
-            await ar.reload(items, store: store)
+            try await ar.reload(items, repository: store.requireRepository())
             XCTAssertEqual(ar.cachedImageTextureCount, 2)
-            await ar.reload([items[1]], store: store)
+            try await ar.reload([items[1]], repository: store.requireRepository())
             XCTAssertEqual(ar.cachedImageTextureCount, 1)
             ar.stop()
             XCTAssertEqual(ar.cachedImageTextureCount, 0)
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
-            await ar.reload(items, store: store)
+            try await ar.reload(items, repository: store.requireRepository())
             XCTAssertEqual(ar.cachedImageTextureCount, 0)
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
         }
@@ -425,14 +425,14 @@
             ar.trackingNormal = true
             ar.localization.propose(.identity, method: .map)
             ar.confirm()
-            await ar.reload(items, store: store)
+            try await ar.reload(items, repository: store.requireRepository())
             XCTAssertEqual(ar.cachedImageTextureCount, ARController.maximumImageTextures)
             XCTAssertEqual(ar.hiddenImageCount, 3)
             let content = try XCTUnwrap(ar.view.scene.anchors.first)
             // Every instruction is still placed; overflow renders as an outline.
             XCTAssertEqual(content.children.count, total)
             XCTAssertTrue(content.children.allSatisfy { !$0.children.isEmpty })
-            await ar.reload(Array(items.prefix(2)), store: store)
+            try await ar.reload(Array(items.prefix(2)), repository: store.requireRepository())
             XCTAssertEqual(ar.hiddenImageCount, 0)
             ar.stop()
         }
@@ -503,7 +503,7 @@
             try await store.createRoom(in: project, name: "Rendering fixture")
             var room = try XCTUnwrap(store.rooms.first)
             room.map_path = "test-only.worldmap"
-            try await store.publishRoom(room)
+            try await store.requireRepository().publishRoom(room)
             let ar = ARController(room: room, mode: .walkthrough)
             ar.trackingNormal = true
             let a = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(0.3, 0, 0)), Point3(SIMD3(0.4, 0.3, 0))]
@@ -523,13 +523,13 @@
             let reopened = Store(localURL: url)
             XCTAssertEqual(reopened.annotations.first(where: { $0.id == image.id }), image)
             XCTAssertEqual(reopened.annotations.first(where: { $0.id == drawing.id })?.strokes?.count, 2)
-            let restoredBytes = try await reopened.downloadAsset(path: path)
+            let restoredBytes = try await reopened.requireRepository().downloadAsset(path: path)
             XCTAssertEqual(restoredBytes, bytes)
             let restored = try await SpatialImageAsset.prepare(restoredBytes)
             XCTAssertEqual(restored.image.size, ar.draftImage?.size)
             ar.localization.propose(.identity, method: .map)
             ar.confirm()
-            await ar.reload([drawing, image], store: store)
+            try await ar.reload([drawing, image], repository: store.requireRepository())
             let roots = ar.view.scene.anchors.flatMap { Array($0.children) }
             // Two disconnected tube meshes.
             XCTAssertEqual(roots.first(where: { $0.name == drawing.id.uuidString })?.children.count, 2)

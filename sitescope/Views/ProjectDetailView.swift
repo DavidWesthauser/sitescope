@@ -64,9 +64,7 @@ struct ProjectDetail: View {
                             .textContentType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                         Button("Share project", systemImage: "person.badge.plus") {
                             store.run {
-                                try await store.client().rpc(
-                                    "share_project",
-                                    arguments: ["project": project.id.uuidString, "worker_email": email])
+                                try await store.shareProject(project, withEmail: email)
                                 email = ""
                             }
                         }.disabled(email.isEmpty)

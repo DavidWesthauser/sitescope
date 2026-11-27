@@ -21,14 +21,8 @@ struct AuthenticationView: View {
                     ).accessibilityIdentifier("auth.password")
                     Button(register ? "Register" : "Sign in") {
                         store.run {
-                            let active = try await store.client().authenticate(
-                                email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password,
-                                register: register)
-                            if active {
-                                store.signedIn = true
-                            } else {
-                                notice = "Check your email to confirm your account, then sign in."
-                            }
+                            let active = try await store.signIn(email: email, password: password, register: register)
+                            if !active { notice = "Check your email to confirm your account, then sign in." }
                         }
                     }.disabled(email.isEmpty || password.count < 8 || store.busy).accessibilityIdentifier("auth.submit")
                     Toggle("I need an account", isOn: $register)
@@ -150,24 +144,20 @@ private struct ProjectRow: View {
         }.padding(.vertical, 4)
     }
 }
-struct Membership: Decodable, Identifiable {
-    let project_id: UUID
-    let user_id: UUID
-    var id: UUID { user_id }
-}
 /// Lists the workers with access to a project; the manager can revoke their access.
 struct MembersView: View {
     @EnvironmentObject var store: Store
     let project: Project
-    @State private var members: [Membership] = []
     @State private var revoking: Membership?
     var body: some View {
-        List(members) { member in
+        List(store.members) { member in
             VStack(alignment: .leading) {
                 Text(member.user_id.uuidString).font(.caption).textSelection(.enabled)
                 Button("Revoke Access", role: .destructive) { revoking = member }
             }
-        }.navigationTitle("Workers").task { do { try await load() } catch { store.error = error.localizedDescription } }
+        }.navigationTitle("Workers").task {
+            do { try await store.loadMembers(of: project) } catch { store.error = error.localizedDescription }
+        }
             .confirmationDialog(
                 "Revoke this worker’s access?",
                 isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }),
@@ -175,19 +165,13 @@ struct MembersView: View {
             ) { member in
                 Button("Revoke Access", role: .destructive) {
                     store.run {
-                        try await store.client().rpc(
-                            "revoke_worker",
-                            arguments: ["project": project.id.uuidString, "worker": member.user_id.uuidString])
-                        try await load()
+                        try await store.revokeMember(member, from: project)
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: { _ in
                 Text("They can no longer open \(project.name). You can share the project with them again later.")
             }
-    }
-    func load() async throws {
-        members = try await store.client().list("memberships", query: "&project_id=eq.\(project.id)")
     }
 }
 /// Edits one spatial instruction. Managers can change its content; everyone can update its status.

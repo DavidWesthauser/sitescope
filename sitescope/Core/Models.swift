@@ -185,3 +185,18 @@ private func simdCross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
     SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
 }
 private func dot(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { a.x * b.x + a.y * b.y + a.z * b.z }
+/// Project and room names: trimmed, 1 to 120 characters. The database enforces the same limits.
+public enum DisplayName {
+    public static let maximumLength = 120
+    /// The trimmed name, or nil when it is empty or too long.
+    public static func normalized(_ value: String) -> String? {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty || text.count > maximumLength ? nil : text
+    }
+}
+/// A worker's access to a cloud project (`memberships` table).
+public struct Membership: Codable, Identifiable, Equatable, Sendable {
+    public let project_id: UUID
+    public let user_id: UUID
+    public var id: UUID { user_id }
+}

@@ -7,7 +7,11 @@ Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies.
 | Path | Responsibility |
 |---|---|
 | `sitescope/App/SitescopeApp.swift` | Entry point; picks login / dashboard / data-recovery screen; handles opened project files |
-| `sitescope/App/Store.swift` | Main-actor app state. Local JSON persistence **or** cloud calls (`if isLocalMode`), project file import/export |
+| `sitescope/App/Store.swift` | The app's view model: state all screens show, input validation, actions that call the services. No file or network code |
+| `sitescope/Services/DataRepository.swift` | Storage protocol used by `Store` and `ARController`; `ProjectSharing` for cloud-only sharing |
+| `sitescope/Services/LocalRepository.swift`, `LocalDataStore.swift` | On-device storage: `local.json` + `assets/`, queued atomic writes, recovery backup |
+| `sitescope/Services/CloudRepository.swift` | Supabase storage and sharing: table, RPC and bucket names |
+| `sitescope/Services/ProjectTransferService.swift` | Export and import of `.sitescope` project files (on-device only) |
 | `sitescope/Services/Backend.swift` | Supabase REST/Auth/Storage client, token refresh, Keychain session (`Vault`). Only the publishable key; RLS applies to every call |
 | `sitescope/Core/` | Pure, testable value types: `Models` (+ validation), `Spatial` (poses, alignment), `Scanning` (coverage gates), `TrackingQuality`, `DrawingGeometry`, `FreehandDraft`, `MapSaveTransaction`, `ProjectTransferArchive`, `RoomSurfaceModel`, `ScanRenderingBudget`, `ScanVisualization` |
 | `sitescope/AR/` | `ARController` (session lifecycle, tracking) with extensions `+Drawing`, `+Persistence` (map save, image load), `+Rendering` (instructions), `+Surfaces` (plane outlines); image/scan-guide helpers |

@@ -11,14 +11,6 @@ struct AuthSession: Codable, Sendable {
     var expires_at: Double?
     var user: User
 }
-enum AppError: LocalizedError {
-    case message(String)
-    var errorDescription: String? {
-        switch self {
-        case .message(let text): text
-        }
-    }
-}
 struct Configuration {
     let url: URL
     let key: String

@@ -138,7 +138,7 @@ struct FrozenDrawingFrame {
     @Published private(set) var isUnsupported = false
     /// Loads annotations and the saved map before AR starts. Failures set `error` and keep the task list usable
     /// instead of blocking the screen, because tasks do not need AR.
-    func prepare(store: Store) async {
+    func prepare(repository: DataRepository) async {
         do {
             guard ARWorldTrackingConfiguration.isSupported else {
                 isUnsupported = true
@@ -152,12 +152,11 @@ struct FrozenDrawingFrame {
             }
             try room.validate()
             if mode != .mapping {
-                try await store.loadAnnotations(room)
-                annotations = store.annotations.filter { $0.room_id == room.id }
+                annotations = try await repository.loadAnnotations(of: room).filter { $0.room_id == room.id }
                 for annotation in annotations { try annotation.validate(room: room) }
                 if let path = room.map_path {
                     do {
-                        let data = try await store.downloadAsset(path: path)
+                        let data = try await repository.downloadAsset(path: path)
                         guard let map = try NSKeyedUnarchiver.unarchivedObject(ofClass: ARWorldMap.self, from: data),
                             map.anchors.contains(where: { $0.name == sentinelName })
                         else { throw AppError.message("Map is corrupt or belongs to another coordinate system.") }
@@ -179,7 +178,7 @@ struct FrozenDrawingFrame {
                 guidance = "No room map is available. Open the task list or ask the manager to rescan this room."
             }
             if mode != .mapping {
-                await loadImageTextures(store: store)
+                await loadImageTextures(repository: repository)
                 if !stopped { render() }
             }
         } catch {

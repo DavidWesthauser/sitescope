@@ -383,9 +383,9 @@ extension ARController {
         imageWidth = min(0.4, 3 / Float(asset.image.size.height / asset.image.size.width))
         renderDraft()
     }
-    func restoreImageDraft(_ item: Annotation, store: Store, request: UUID) async throws {
+    func restoreImageDraft(_ item: Annotation, repository: DataRepository, request: UUID) async throws {
         guard let image = item.image else { return }
-        let data = try await store.downloadAsset(path: image.path)
+        let data = try await repository.downloadAsset(path: image.path)
         try await setImage(data, request: request)
         guard imageRequestIsCurrent(request) else { throw CancellationError() }
         imageWidth = image.width

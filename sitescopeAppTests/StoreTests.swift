@@ -13,10 +13,9 @@ import XCTest
         if store.isLocalMode {
             XCTAssertTrue(store.signedIn)
             XCTAssertNil(store.error)
-        } else if store.backend == nil {
+        } else if !store.hasBackend {
             XCTAssertFalse(store.signedIn)
             XCTAssertTrue(store.error?.contains("Configure") == true)
-            XCTAssertThrowsError(try store.client())
         }
     }
     func testOperationFailureReleasesBusyAndPreservesData() async {
@@ -62,9 +61,9 @@ extension StoreTests {
         let store = Store(localURL: url)
         XCTAssertTrue(store.signedIn)
         XCTAssertTrue(store.isLocalMode)
-        XCTAssertNil(store.backend)
+        XCTAssertFalse(store.hasBackend)
         XCTAssertNil(store.error)
-        XCTAssertThrowsError(try store.client())
+        XCTAssertNotNil(store.repository as? LocalRepository)
         XCTAssertTrue(store.projects.isEmpty)
         XCTAssertTrue(store.rooms.isEmpty)
         XCTAssertTrue(store.annotations.isEmpty)
@@ -80,7 +79,7 @@ extension StoreTests {
             id: UUID(), image_path: "fixture.png", width: 0.2, height: 0.2, room_from_marker: .identity)
         room.reference_points = [Point3(.zero), Point3(SIMD3(1, 0, 0))]
         room.reference_notes = "Two corners"
-        try await store.publishRoom(room)
+        try await store.requireRepository().publishRoom(room)
         var task = Annotation(
             room: room, kind: .text, pose: .identity, title: "Captured instruction fixture", detail: "Unit test only")
         try await store.saveInstruction(task, room: room, replacing: false)
@@ -89,12 +88,12 @@ extension StoreTests {
         let reopened = Store(localURL: url)
         XCTAssertEqual(reopened.rooms.first, room)
         XCTAssertEqual(reopened.annotations.first, task)
-        let bytes = try await reopened.downloadAsset(path: path)
+        let bytes = try await reopened.requireRepository().downloadAsset(path: path)
         XCTAssertEqual(bytes, fixture)
         var movedRoom = room
         movedRoom.map_path = "another.worldmap"
         do {
-            try await reopened.publishRoom(movedRoom)
+            try await reopened.requireRepository().publishRoom(movedRoom)
             XCTFail("Should reject replacing a published map")
         } catch {}
     }
@@ -111,7 +110,7 @@ extension StoreTests {
         room.scan_guide_jpeg = Data([0xff, 0xd8, 0x11, 0xff, 0xd9]).base64EncodedString()
         room.map_path = "\(project.id)/\(room.id)/test.worldmap"
         try await store.uploadAsset(path: room.map_path!, data: Data([1, 2, 3]), type: "application/octet-stream")
-        try await store.publishRoom(room)
+        try await store.requireRepository().publishRoom(room)
         let reopened = Store(localURL: url)
         XCTAssertEqual(reopened.rooms.first, room)
         XCTAssertEqual(reopened.rooms.first?.coordinate_id, room.coordinate_id)
@@ -119,14 +118,14 @@ extension StoreTests {
             var changed = room
             changed.scan_guide_jpeg = guide
             do {
-                try await reopened.publishRoom(changed)
+                try await reopened.requireRepository().publishRoom(changed)
                 XCTFail("Published guide must remain bound to its map")
             } catch {}
             XCTAssertEqual(reopened.rooms.first, room)
         }
         var renamed = room
         renamed.name = "Renamed room"
-        try await reopened.publishRoom(renamed)
+        try await reopened.requireRepository().publishRoom(renamed)
         XCTAssertEqual(Store(localURL: url).rooms.first, renamed)
     }
     func testLocalProjectAndRoomCRUDPersistsAndCascadesOnlyOwnedRecords() async throws {

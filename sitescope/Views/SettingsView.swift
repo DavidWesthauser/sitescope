@@ -25,17 +25,11 @@ struct SettingsView: View {
                 }
             } else {
                 Section("Account") {
-                    Text(store.backend?.user?.email ?? "Signed in")
+                    Text(store.accountEmail ?? "Signed in")
                 }
                 Section {
                     Button("Sign Out", role: .destructive) {
-                        store.run {
-                            await store.backend?.signOut()
-                            store.projects = []
-                            store.rooms = []
-                            store.annotations = []
-                            store.signedIn = false
-                        }
+                        store.run { await store.signOut() }
                     }
                 }
             }

@@ -4,15 +4,15 @@ import UIKit
 
 /// Saving the room map and loading saved instructions and their image textures.
 extension ARController {
-    func reload(_ items: [Annotation], store: Store) async {
+    func reload(_ items: [Annotation], repository: DataRepository) async {
         guard !stopped else { return }
         annotations = items
-        await loadImageTextures(store: store)
+        await loadImageTextures(repository: repository)
         if !stopped { render() }
     }
     /// Textures are capped at `maximumImageTextures`; the rest stay as outlines (`hiddenImageCount`). Each call gets a
     /// generation token so results from a superseded load are dropped instead of written into the new one.
-    func loadImageTextures(store: Store) async {
+    func loadImageTextures(repository: DataRepository) async {
         guard !stopped, !Task.isCancelled else { return }
         let generation = UUID()
         imageLoadGeneration = generation
@@ -32,7 +32,7 @@ extension ARController {
         for path in missing {
             guard imageLoadGeneration == generation, !stopped, !Task.isCancelled else { return }
             do {
-                let data = try await store.downloadAsset(path: path)
+                let data = try await repository.downloadAsset(path: path)
                 guard imageLoadGeneration == generation, !stopped, !Task.isCancelled else { return }
                 let texture = try await SpatialImageAsset.loadTexture(data)
                 guard imageLoadGeneration == generation, !stopped, !Task.isCancelled else { return }
@@ -46,13 +46,13 @@ extension ARController {
     }
     /// Publishes the room map. The map is captured once and kept in `mapSave`, so a retry after a failed upload
     /// reuses the same snapshot. Each step checks `generation`, so an interrupted or restarted session never publishes a stale map.
-    func saveMap(store: Store) async throws -> Room {
+    func saveMap(repository: DataRepository) async throws -> Room {
         let generation = mapSave.generation
         guard mode == .mapping, running, !stopped, !interrupted, trackingNormal else {
             throw AppError.message("The scan is paused. Recover tracking before saving the room.")
         }
         if let publication = mapSave.publication {
-            try await store.publishRoom(publication)
+            try await repository.publishRoom(publication)
             return try finishMapPublication(publication, generation: generation)
         }
         guard scan.canFinish else {
@@ -105,11 +105,11 @@ extension ARController {
         updated.map_path = mapPath
         updated.scan_guide_jpeg = mapSave.guide
         updated.surfaces = detectedSurfaces.values.sorted { $0.id.uuidString < $1.id.uuidString }
-        try await store.uploadAsset(path: mapPath, data: data, type: "application/octet-stream")
+        try await repository.uploadAsset(path: mapPath, data: data, type: "application/octet-stream")
         try mapSave.validate(generation)
         // An interrupted/restarted session must never publish or reuse its predecessor's snapshot.
         try mapSave.stage(updated, generation: generation)
-        try await store.publishRoom(updated)
+        try await repository.publishRoom(updated)
         return try finishMapPublication(updated, generation: generation)
     }
 

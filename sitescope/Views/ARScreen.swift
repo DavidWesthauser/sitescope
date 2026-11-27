@@ -215,7 +215,13 @@ struct ARScreen: View {
         .onPreferenceChange(CameraAimPreference.self) { point in
             if let point { ar.aimPoint = ar.view.convert(point, from: nil) }
         }
-        .task { if startSession { await ar.prepare(store: store) } }
+        .task {
+            guard startSession else { return }
+            do {
+                let repository = try store.requireRepository()
+                await ar.prepare(repository: repository)
+            } catch { ar.error = error.localizedDescription }
+        }
         .task(id: room.scan_guide_jpeg) { scanGuideImage = room.scan_guide_jpeg.flatMap(ScanGuideImage.thumbnail) }
         .onDisappear { ar.stop() }
         .modifier(ARSessionFeedback(ar: ar))
@@ -330,7 +336,10 @@ struct ARScreen: View {
                                 let request = ar.beginImageRequest(clearExisting: true)
                                 Task {
                                     defer { ar.finishImageRequest(request) }
-                                    do { try await ar.restoreImageDraft(item, store: store, request: request) } catch {
+                                    do {
+                                        try await ar.restoreImageDraft(
+                                            item, repository: store.requireRepository(), request: request)
+                                    } catch {
                                         if ar.imageRequestIsCurrent(request) { ar.error = error.localizedDescription }
                                     }
                                 }
@@ -683,7 +692,7 @@ struct ARScreen: View {
         Task {
             defer { saving = false }
             do {
-                let updated = try await ar.saveMap(store: store)
+                let updated = try await ar.saveMap(repository: store.requireRepository())
                 ar.beginEditing(updated)
             } catch MapSaveTransaction.Failure.savedSessionChanged {
                 ar.error = MapSaveTransaction.Failure.savedSessionChanged.localizedDescription
@@ -699,7 +708,8 @@ struct ARScreen: View {
     private func reload() async {
         do {
             try await store.loadAnnotations(room)
-            await ar.reload(store.annotations.filter { $0.room_id == room.id }, store: store)
+            try await ar.reload(
+                store.annotations.filter { $0.room_id == room.id }, repository: store.requireRepository())
         } catch { ar.error = error.localizedDescription }
     }
 }

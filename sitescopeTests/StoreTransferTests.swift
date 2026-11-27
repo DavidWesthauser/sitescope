@@ -35,7 +35,7 @@ import simd
                 room_from_marker: .identity)
             rooms[index].reference_points = [Point3(.zero), Point3(SIMD3(1, 0, 0))]
             rooms[index].reference_notes = "Legacy references"
-            try await store.publishRoom(rooms[index])
+            try await store.requireRepository().publishRoom(rooms[index])
         }
         var matrix = matrix_identity_float4x4
         matrix.columns.3 = SIMD4(1, 2, -3, 1)
@@ -96,7 +96,7 @@ import simd
             XCTAssertTrue(room.reference_notes.isEmpty)
             let path = try XCTUnwrap(room.map_path)
             XCTAssertTrue(path.hasPrefix("\(imported.id.uuidString.lowercased())/\(room.id.uuidString.lowercased())/"))
-            let bytes = try await target.downloadAsset(path: path)
+            let bytes = try await target.requireRepository().downloadAsset(path: path)
             XCTAssertEqual(bytes, source.map)
             let originalItem = try XCTUnwrap(source.items.first { $0.room_id == original.id })
             var expected = originalItem
@@ -108,7 +108,7 @@ import simd
                 expected.image = image
                 XCTAssertTrue(
                     image.path.hasPrefix("\(imported.id.uuidString.lowercased())/\(room.id.uuidString.lowercased())/"))
-                let bytes = try await target.downloadAsset(path: image.path)
+                let bytes = try await target.requireRepository().downloadAsset(path: image.path)
                 XCTAssertEqual(bytes, source.image)
             }
             // Pose, coordinate ID, geometry, task status and dimensions stay unchanged.

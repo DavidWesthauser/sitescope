@@ -21,7 +21,7 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 
 | ID | Requirement | State | What exists / what's missing | Tickets |
 |---|---|---|---|---|
-| M1 | CRUD room notes, local + server | 🟡 | Local CRUD works (instructions + tasks). Server paths exist in `Store` but untested; no backend connected | T-003, T-008 |
+| M1 | CRUD room notes, local + server | 🟡 | Local CRUD works (instructions + tasks). Server paths exist in `CloudRepository` but untested; no backend connected | T-003, T-008 |
 | M2 | Upload later after offline creation | ❌ | No queue. Local mode never uploads; cloud mode fails without network | T-008 |
 | M3 | AR view on site + 3D view elsewhere | 🟡 | AR walkthrough with ARWorldMap recognition implemented, physically unverified for latest code. No 3D model viewer (only a scan miniature during scanning) | T-009, T-010, H-001 |
 | M4 | Accounts and their files on backend | 🟡 | Auth + Storage client (`Backend.swift`), private `room-assets` bucket in migration. Not deployed | H-003, T-008 |
@@ -40,7 +40,7 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 | G4 | Native device feature | 🟡 | Camera + ARKit in the core workflow; permission request and denial message. Not verified on a phone since the latest changes. PhotosPicker for images | H-001 |
 | G5 | Error handling / lifecycle | 🟡 | Validation, local write failure handling, unreadable-data recovery screen, AR interruption handling. Network/offline errors and permission flows for new features open | T-012 |
 | G6 | Automated tests | 🟡 | 92 portable + 113 simulator unit/layout tests pass; 5 of 7 UI flows pass, 2 skip. Cloud flows not run (no test credentials) | T-015 |
-| G7 | Architecture / code quality | 🟡 | Folders App/Core/AR/Services/Views. Code is formatted with `swift-format` (`.swift-format`, see `docs/CONVENTIONS.md`) and lint-clean. Remaining gap: `Store` mixes local + cloud + transfer; views call `store.client().rpc` directly | T-008, T-027 |
+| G7 | Architecture / code quality | 🟡 | Folders App/Core/AR/Services/Views. Code is formatted with `swift-format` (`.swift-format`, see `docs/CONVENTIONS.md`) and lint-clean. `Store` is a view model only; storage, cloud calls and import/export live in `Services/` (2026-11-27, not yet compiled or tested) | T-008, T-027 |
 | — | Reproducible backend + seed data | 🟡 | Migrations, local seed (3 users), setup guide exist; need update for new schema and hosted examiner accounts | T-015, H-007 |
 | P2 | Regular commits by both members | 🟡 | History squashed into one `init` commit on 2026-11-05; work since then goes through branches and PRs. Both members still need regular commits | H-004 |
 | P4 | AI reflection per member in README | 🟡 | Tool usage documented in AI_USAGE.md; personal examples per member missing | H-006 |
@@ -48,7 +48,7 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 ## What is implemented (code map)
 
 - **Projects/rooms/tasks UI**: `sitescope/Views/ManagementViews.swift` (Auth, ProjectDashboard, ProjectDetail, MembersView, RoomDetail, TaskEditor, Settings, LocalDataRecoveryView).
-- **State + persistence**: `sitescope/App/Store.swift` — local JSON in Application Support (`sitescope/local.json`, `sitescope/assets/`), atomic serialized writes; cloud branch through `Backend`.
+- **State**: `sitescope/App/Store.swift` (view model). **Persistence**: `LocalRepository` + `LocalDataStore` (local JSON in Application Support, `sitescope/local.json`, `sitescope/assets/`, atomic serialized writes) or `CloudRepository` through `Backend`.
 - **Backend client**: `sitescope/Services/Backend.swift` — Supabase REST/Auth/Storage via URLSession, Keychain session (`Vault`).
 - **AR**: `sitescope/AR/ARController*.swift` — scanning with readiness gates (4 headings × 3 positions), map save, recognition, freehand/area/image drawing on a locked view, bounded rendering.
 - **Pure logic**: `sitescope/Core/*` — models + validation, spatial math, scan coverage, tracking quality, transfer archive codec, render budgets.
