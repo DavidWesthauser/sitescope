@@ -7,7 +7,7 @@ Snapshot: **2026-11-19**. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENT
 - The app is a working **local-only** prototype: projects → rooms, camera-only ARKit scanning, drawing/area/image instructions, task status, AR room recognition via ARWorldMap, and offline file transfer (`.sitescope`, AirDrop/Files).
 - Build is green: `swift test` and the simulator test run pass. Everything is named `sitescope` (T-001).
 - `.gitignore` ignores `**/Secrets.xcconfig` and build artifacts; no secret was ever committed (history checked 2026-11-19, T-002).
-- Supabase client, auth, Keychain, 4 migrations, RLS and a 31-assertion pgTAP suite are **written but never deployed or run**. The cloud requirements (G2, G3, M1 server side, M4, M6) are therefore not met yet.
+- Supabase schema rebuilt from DATABASE_API.md (T-003, 2026-11-27): one migration with organizations, profiles, projects → houses → rooms, grants, comments, annotations, storage policies; the pgTAP access suite passes on the local stack. **Not deployed to a hosted project yet**, so G2, G3, M1 server side, M4 and M6 are not met.
 - Missing entirely: houses level (M9), comments (M8), offline sync queue (M2), 3D viewer (M3 part 2), multi-role permissions (M5), language setting, LiDAR mode, 3D/video export, 2FA.
 - History was squashed into one `init` commit on 2026-11-05; regular small commits by both members from now on (P2, H-004).
 
@@ -36,7 +36,7 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 | N4 | 2FA | ❌ | Not implemented | T-021 |
 | G1 | Mobile-first UI, HIG, accessibility | 🟡 | Native SwiftUI lists/forms/sheets; HIG pass on Project, Room, Task, Settings (inline names, destructive actions in own section with named confirmation, footers). Screenshot tour `scripts/screenshots.sh`. No VoiceOver audit | T-012 |
 | G2 | Cloud storage | ❌ | Backend not connected | T-003, H-003 |
-| G3 | Accounts + server-side protection | 🟡 | RLS/storage policies authored, never executed | T-003, T-006 |
+| G3 | Accounts + server-side protection | 🟡 | RLS, column privileges and storage policies pass the pgTAP suite locally; not deployed, not reviewed by a human | T-003, T-006 |
 | G4 | Native device feature | 🟡 | Camera + ARKit in the core workflow; permission request and denial message. Not verified on a phone since the latest changes. PhotosPicker for images | H-001 |
 | G5 | Error handling / lifecycle | 🟡 | Validation, local write failure handling, unreadable-data recovery screen, AR interruption handling. Network/offline errors and permission flows for new features open | T-012 |
 | G6 | Automated tests | 🟡 | 92 portable + 113 simulator unit/layout tests pass; 5 of 7 UI flows pass, 2 skip. Cloud flows not run (no test credentials) | T-015 |
@@ -52,13 +52,14 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
 - **Backend client**: `sitescope/Services/Backend.swift` — Supabase REST/Auth/Storage via URLSession, Keychain session (`Vault`).
 - **AR**: `sitescope/AR/ARController*.swift` — scanning with readiness gates (4 headings × 3 positions), map save, recognition, freehand/area/image drawing on a locked view, bounded rendering.
 - **Pure logic**: `sitescope/Core/*` — models + validation, spatial math, scan coverage, tracking quality, transfer archive codec, render budgets.
-- **Backend schema**: `supabase/migrations/2026102*` — projects, memberships, rooms, annotations, RLS, RPCs `share_project`, `revoke_worker`, `set_task_status`, storage bucket `room-assets`.
+- **Backend schema**: `supabase/migrations/20261127120000_schema.sql`, documented in DATABASE_API.md — access levels via `scope_level`, RPCs `grant_access`, `revoke_access`, `set_task_status`, `set_comment_hidden`, private bucket `room-assets`. App-side row shapes in `sitescope/Services/CloudRecords.swift`.
 - **Tests**: `sitescopeTests` (core, portable), `sitescopeAppTests` (store/backend fixtures, AR layout), `sitescopeUITests/WorkflowTests.swift` (7 flows: import cancel, export sheet, auth validation, local project/room create, project rename relaunch, room rename/delete relaunch, cloud CRUD [skips without credentials]); `supabase/tests/access.test.sql`.
 
 ## Known issues
 
 - Legacy marker/reference-point fields and constraints remain in models and migration 001 (inactive; deleted in T-027).
-- Release builds require backend config; Debug without config falls into local mode silently.
+- Release builds require backend config; Debug without config falls into local mode silently. With config, local mode is behind "Use Without an Account".
+- Cloud mode has no house screens: each project gets one "Main building" house (T-005).
 - Force-quitting the app loses unsaved AR drafts.
 - Long-scan crash on iPhone 12 mini reported earlier; mitigations added, never confirmed on device (H-001).
 - The AR core is unproven on phones: accuracy, moved furniture and sharing between phones (H-001). A room map cannot be replaced, so a changed room means a new room without its notes (T-010).
@@ -73,4 +74,4 @@ Legend: ✅ done and verified · 🟡 partial / implemented but unverified · �
   - Manual simulator smoke test after the rename passed: create project/room, AR unsupported message, export and re-import of a `.sitescope` file; all text says sitescope. UI findings in T-012.
 - Bug fixed during the rename: transfer archive magic was 11 bytes (`sitescope01`) while the reader checked 8 bytes, so every export failed to import. Now `sscope01` (8 bytes).
 - Earlier (2026-10-31, before rename): 119 tests, 117 passed, 2 skipped. Superseded.
-- pgTAP suite: never run. Physical device: last install was commit `88d4de7` (pre-squash, not in this repo) on iPhone 12 mini (2026-10-23); latest AR changes not tested on hardware.
+- pgTAP suite: passes on the local stack (2026-11-27). Physical device: last install was commit `88d4de7` (pre-squash, not in this repo) on iPhone 12 mini (2026-10-23); latest AR changes not tested on hardware.
