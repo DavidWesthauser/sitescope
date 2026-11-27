@@ -10,21 +10,8 @@ public struct Project: Codable, Identifiable, Equatable, Sendable {
         self.name = name
     }
 }
-/// Printed marker used to recover room alignment; width and height are in metres.
-public struct Marker: Codable, Equatable, Sendable {
-    public var id: UUID
-    public var image_path: String
-    public var width: Double
-    public var height: Double
-    public var room_from_marker: Pose
-    public init(id: UUID, image_path: String, width: Double, height: Double, room_from_marker: Pose) {
-        self.id = id
-        self.image_path = image_path
-        self.width = width
-        self.height = height
-        self.room_from_marker = room_from_marker
-    }
-}
+/// Files written before T-027 may also contain `marker`, `reference_points` and `reference_notes` from the removed
+/// printed-marker alignment. JSON decoding ignores unknown keys, so those rooms still open.
 public struct Room: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var project_id: UUID
@@ -34,9 +21,6 @@ public struct Room: Codable, Identifiable, Equatable, Sendable {
     public var map_path: String?
     /// Optional human-visible scene photo for revisiting a scan, never a localization marker.
     public var scan_guide_jpeg: String?
-    public var marker: Marker?
-    public var reference_points: [Point3] = []
-    public var reference_notes: String = ""
     public var surfaces: [SurfacePatch]?
     public init(id: UUID = UUID(), project_id: UUID, name: String) {
         self.id = id
@@ -55,18 +39,7 @@ public struct Room: Codable, Identifiable, Equatable, Sendable {
                 throw SpatialError.invalidGeometry
             }
         }
-        // Two reference points are the manual alignment input; zero means no manual reference was taken.
-        guard spatial_version == 1, reference_points.count == 0 || reference_points.count == 2,
-            reference_points.allSatisfy({ [$0.x, $0.y, $0.z].allSatisfy(\.isFinite) }),
-            marker.map({ $0.width.isFinite && $0.height.isFinite && $0.width >= 0.05 && $0.width <= 2 && $0.height > 0 }
-            ) ?? true
-        else { throw SpatialError.incompatibleVersion }
-        if reference_points.count == 2 {
-            guard !reference_notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw SpatialError.invalidGeometry
-            }
-            _ = try AlignmentMath.manual(room: reference_points, session: reference_points)
-        }
+        guard spatial_version == 1 else { throw SpatialError.incompatibleVersion }
         guard (surfaces?.count ?? 0) <= 128 else { throw SpatialError.invalidGeometry }
         if let surfaces {
             for surface in surfaces {

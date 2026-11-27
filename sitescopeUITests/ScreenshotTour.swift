@@ -357,7 +357,7 @@ final class ScreenshotTour: XCTestCase {
             let map = mapped ? ", \"map_path\": \"\(ScreenshotTour.mapPath(project, id))\"" : ""
             return """
                 {"id": "\(id)", "project_id": "\(project)", "name": "\(name)", "spatial_version": 1,
-                 "coordinate_id": "\(coordinate)", "reference_points": [], "reference_notes": ""\(map)}
+                 "coordinate_id": "\(coordinate)"\(map)}
                 """
         }
         func task(_ n: Int, _ title: String, _ detail: String, _ status: String, _ priority: Int) -> String {

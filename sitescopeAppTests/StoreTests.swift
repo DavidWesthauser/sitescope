@@ -76,13 +76,10 @@ extension StoreTests {
         let fixture = Data("Archive fixture for storage test only, not an ARWorldMap".utf8)
         try await store.uploadAsset(path: path, data: fixture, type: "application/octet-stream")
         room.map_path = path
-        room.marker = Marker(
-            id: UUID(), image_path: "fixture.png", width: 0.2, height: 0.2, room_from_marker: .identity)
-        room.reference_points = [Point3(.zero), Point3(SIMD3(1, 0, 0))]
-        room.reference_notes = "Two corners"
         try await store.publishRoom(room)
         var task = Annotation(
-            room: room, kind: .text, pose: .identity, title: "Captured instruction fixture", detail: "Unit test only")
+            room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))],
+            title: "Captured instruction fixture", detail: "Unit test only")
         try await store.saveInstruction(task, room: room, replacing: false)
         task.status = .completed
         try await store.saveTask(task, room: room, manager: true)
@@ -168,6 +165,45 @@ extension StoreTests {
         XCTAssertEqual(Set(store.projects.map(\.name)), ["A", "B", "C"])  // Queued writes; none overwrites another.
         XCTAssertEqual(Set(Store(localURL: url).projects.map(\.name)), ["A", "B", "C"])
     }
+    /// A `local.json` written before T-027: rooms with marker fields and text, arrow and marker notes.
+    func testLocalFileFromBeforeCleanupStillOpens() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let project = UUID()
+        let room = UUID()
+        let coordinate = UUID()
+        let pose = Pose.identity.elements
+        let old: [String: Any] = [
+            "projects": [["id": project.uuidString, "owner_id": UUID().uuidString, "name": "Old site"]],
+            "rooms": [
+                [
+                    "id": room.uuidString, "project_id": project.uuidString, "name": "Kitchen", "spatial_version": 1,
+                    "coordinate_id": coordinate.uuidString, "map_path": "\(project)/\(room)/old.worldmap",
+                    "marker": [
+                        "id": UUID().uuidString, "image_path": "\(project)/\(room)/marker.png", "width": 0.2,
+                        "height": 0.2, "room_from_marker": pose,
+                    ],
+                    "reference_points": [["x": 0, "y": 0, "z": 0], ["x": 1, "y": 0, "z": 0]],
+                    "reference_notes": "Two corners",
+                ]
+            ],
+            "annotations": [("text", 0), ("arrow", 2), ("marker", 0)].map { kind, points in
+                [
+                    "id": UUID().uuidString, "room_id": room.uuidString, "coordinate_id": coordinate.uuidString,
+                    "kind": kind, "pose": pose, "points": (0..<points).map { ["x": Float($0), "y": 0, "z": 0] },
+                    "title": "Old \(kind) note", "detail": "", "status": "todo", "priority": 1,
+                ] as [String: Any]
+            },
+        ]
+        let url = directory.appendingPathComponent("local.json")
+        try JSONSerialization.data(withJSONObject: old).write(to: url)
+        let store = Store(localURL: url)
+        XCTAssertNil(store.unreadableLocalData)
+        XCTAssertEqual(store.rooms.map(\.id), [room])
+        XCTAssertEqual(store.annotations.map(\.kind), [.text, .arrow, .marker])
+        for annotation in store.annotations { XCTAssertNoThrow(try annotation.validate(room: store.rooms[0])) }
+    }
     func testCorruptLocalDataIsReportedWithoutDiscardingFile() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -199,7 +235,7 @@ extension StoreTests {
             let room = Room(project_id: UUID(), name: "Rendering fixture")
             let ar = ARController(room: room, mode: .walkthrough)
             ar.trackingNormal = true
-            ar.localization.propose(.identity, method: .map)
+            ar.localization.propose(.identity)
             let points = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(1, 1, 0))]
             let line = Annotation(
                 room: room, kind: .line, pose: .identity, points: points, title: "Drawing", detail: "")

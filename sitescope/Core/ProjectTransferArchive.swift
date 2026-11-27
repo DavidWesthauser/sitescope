@@ -170,7 +170,7 @@ public enum ProjectTransferArchive {
             guard room.project_id == manifest.project.id, rooms[room.id] == nil else { throw Failure.invalidProject }
             try room.validate()
             rooms[room.id] = room
-            points += room.reference_points.count + (room.surfaces ?? []).reduce(0) { $0 + $1.vertices.count }
+            points += (room.surfaces ?? []).reduce(0) { $0 + $1.vertices.count }
             if let path = room.map_path {
                 try validatePath(path, project: manifest.project.id, room: room.id)
                 paths.insert(path)

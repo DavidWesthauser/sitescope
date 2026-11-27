@@ -153,28 +153,6 @@ final class SpatialTests: XCTestCase {
         XCTAssertNil(
             DrawingGeometry.consistentNormal([SIMD3(0, 0, 1), SIMD3(0, 0, -1), SIMD3(0, 0, 1), SIMD3(0, 0, -1)]))
     }
-    func testMarkerRecoveryAcrossDifferentOriginsAndYaw() throws {
-        let roomFromMarker = try transform(SIMD3(3, 1, -4), yaw: 0.3)
-        let expected = try transform(SIMD3(-7, 0.2, 5), yaw: -1.2)
-        let sessionFromMarker = try Pose(expected.matrix * roomFromMarker.matrix)
-        let result = try AlignmentMath.marker(sessionFromMarker: sessionFromMarker, roomFromMarker: roomFromMarker)
-        assertMatrix(result, expected)
-        let point = SIMD4<Float>(1, 2, -3, 1)
-        XCTAssertLessThan(simd_length(result.matrix * point - expected.matrix * point), 0.0001)
-    }
-    func testManualTwoPointRecovery() throws {
-        let expected = try transform(SIMD3(4, 0.5, -2), yaw: 0.9)
-        let points = [Point3(SIMD3(1, 0, -2)), Point3(SIMD3(3, 0.2, -1))]
-        let session = points.map { Point3((expected.matrix * SIMD4($0.vector, 1)).xyz) }
-        assertMatrix(try AlignmentMath.manual(room: points, session: session), expected)
-    }
-    func testManualRejectsVerticalAndInconsistentPoints() {
-        let room = [Point3(.zero), Point3(SIMD3(0, 1, 0))]
-        XCTAssertThrowsError(try AlignmentMath.manual(room: room, session: room))
-        XCTAssertThrowsError(
-            try AlignmentMath.manual(
-                room: [Point3(.zero), Point3(SIMD3(1, 0, 0))], session: [Point3(.zero), Point3(SIMD3(3, 0, 0))]))
-    }
     func testPoseRejectsScaleReflectionNaNAndMalformedJSON() throws {
         var m = matrix_identity_float4x4
         m.columns.0.x = 2
@@ -198,7 +176,7 @@ final class SpatialTests: XCTestCase {
         state.searching()
         state.confirm(normalTracking: true)
         XCTAssertNil(state.roomToSession)
-        state.propose(.identity, method: .marker)
+        state.propose(.identity)
         XCTAssertNil(state.roomToSession)
         state.confirm(normalTracking: false)
         XCTAssertNil(state.roomToSession)
@@ -212,11 +190,11 @@ final class SpatialTests: XCTestCase {
     }
     func testTimeoutAndRestartInvalidateCandidates() {
         var state = Localization()
-        state.propose(.identity, method: .map)
+        state.propose(.identity)
         state.fail()
         XCTAssertEqual(state.state, .failed)
         XCTAssertNil(state.roomToSession)
-        state.propose(.identity, method: .manual)
+        state.propose(.identity)
         state.confirm(normalTracking: true)
         state.searching()
         XCTAssertNil(state.candidate)
@@ -225,7 +203,8 @@ final class SpatialTests: XCTestCase {
     func testAnnotationSerializationAndRoomIsolation() throws {
         let room = Room(project_id: UUID(), name: "Kitchen")
         var item = Annotation(
-            room: room, kind: .text, pose: try transform(SIMD3(1, 2, 3)), title: "Paint wall", detail: "Blue")
+            room: room, kind: .line, pose: try transform(SIMD3(1, 2, 3)),
+            points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))], title: "Paint wall", detail: "Blue")
         item.status = .inProgress
         let restored = try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(item))
         XCTAssertEqual(restored, item)
@@ -249,20 +228,30 @@ final class SpatialTests: XCTestCase {
     func testTaskStatusAndPriorityPersist() throws {
         let room = Room(project_id: UUID(), name: "Room")
         for status in TaskStatus.allCases {
-            var task = Annotation(room: room, kind: .marker, pose: .identity, title: "Repair", detail: "Check pipe")
+            var task = Annotation(
+                room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))],
+                title: "Repair", detail: "Check pipe")
             task.status = status
             task.priority = 2
             XCTAssertEqual(try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(task)), task)
         }
     }
-    func testRoomMetadataRoundtripAndVersionRejection() throws {
-        var room = Room(project_id: UUID(), name: "Kitchen")
-        room.marker = Marker(
-            id: UUID(), image_path: "project/room/marker.png", width: 0.2, height: 0.3, room_from_marker: .identity)
-        room.reference_points = [Point3(.zero), Point3(SIMD3(1, 0, 0))]
-        XCTAssertEqual(try JSONDecoder().decode(Room.self, from: JSONEncoder().encode(room)), room)
-        room.spatial_version = 2
-        XCTAssertThrowsError(try room.validate())
+    func testRoomWithRemovedMarkerFieldsStillDecodesAndVersionIsChecked() throws {
+        let room = Room(project_id: UUID(), name: "Kitchen")
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(room)) as? [String: Any])
+        // Keys written by builds before T-027, when rooms could carry a printed marker and two reference points.
+        object["marker"] = [
+            "id": UUID().uuidString, "image_path": "project/room/marker.png", "width": 0.2, "height": 0.3,
+            "room_from_marker": Pose.identity.elements,
+        ]
+        object["reference_points"] = [["x": 0, "y": 0, "z": 0], ["x": 1, "y": 0, "z": 0]]
+        object["reference_notes"] = "Two corners"
+        let old = try JSONDecoder().decode(Room.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(old, room)
+        try old.validate()
+        var future = room
+        future.spatial_version = 2
+        XCTAssertThrowsError(try future.validate())
     }
     func testProjectAndRoomIDsRemainStableOnRename() throws {
         var project = Project(owner_id: UUID(), name: "Old")
@@ -323,7 +312,7 @@ extension SpatialTests {
         XCTAssertFalse(state.searchTimedOut)
         XCTAssertEqual(state.state, .relocalizing)
         state.timedOut()
-        state.propose(.identity, method: .manual)
+        state.propose(.identity)
         XCTAssertFalse(state.searchTimedOut)
         XCTAssertEqual(state.state, .verifying)
         state.searching()
@@ -477,7 +466,8 @@ extension SpatialTests {
     func testTypedLabelLengthMatchesCloudLimit() throws {
         let room = Room(project_id: UUID(), name: "Room")
         var note = Annotation(
-            room: room, kind: .text, pose: .identity, title: String(repeating: "a", count: 240), detail: "")
+            room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))],
+            title: String(repeating: "a", count: 240), detail: "")
         try note.validate(room: room)
         note.title.append("b")
         XCTAssertThrowsError(try note.validate(room: room))

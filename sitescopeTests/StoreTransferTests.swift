@@ -30,11 +30,6 @@ import simd
             let path = "\(project.id.uuidString)/\(rooms[index].id.uuidString)/room.worldmap"
             try await store.uploadAsset(path: path, data: map, type: "application/octet-stream")
             rooms[index].map_path = path
-            rooms[index].marker = Marker(
-                id: UUID(), image_path: "obsolete-missing-marker.png", width: 0.2, height: 0.2,
-                room_from_marker: .identity)
-            rooms[index].reference_points = [Point3(.zero), Point3(SIMD3(1, 0, 0))]
-            rooms[index].reference_notes = "Legacy references"
             try await store.publishRoom(rooms[index])
         }
         var matrix = matrix_identity_float4x4
@@ -91,9 +86,6 @@ import simd
             let room = try XCTUnwrap(importedRooms.first { $0.name == original.name })
             XCTAssertEqual(room.coordinate_id, original.coordinate_id)
             XCTAssertEqual(room.surfaces, original.surfaces)
-            XCTAssertNil(room.marker)
-            XCTAssertTrue(room.reference_points.isEmpty)
-            XCTAssertTrue(room.reference_notes.isEmpty)
             let path = try XCTUnwrap(room.map_path)
             XCTAssertTrue(path.hasPrefix("\(imported.id.uuidString.lowercased())/\(room.id.uuidString.lowercased())/"))
             let bytes = try await target.downloadAsset(path: path)
@@ -122,7 +114,25 @@ import simd
             try FileManager.default.contentsOfDirectory(atPath: targetRoot.path).contains {
                 $0.hasPrefix(".sitescope-transfer-")
             })
-        XCTAssertEqual(source.store.rooms, source.rooms)  // Export never strips legacy data from the source itself.
+        XCTAssertEqual(source.store.rooms, source.rooms)  // Export never changes the source project.
+    }
+    func testArchiveFromBeforeCleanupImports() async throws {
+        let root = try folder()
+        let targetRoot = try folder()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: targetRoot)
+        }
+        let source = try await fixture(at: root)
+        let archive = try await source.store.exportProjectFile(source.project)
+        defer { try? FileManager.default.removeItem(at: archive.deletingLastPathComponent()) }
+        let old = try ProjectTransferArchiveTests.addingLegacyFields(
+            to: archive, roomID: source.rooms[0].id, coordinateID: source.rooms[0].coordinate_id)
+        let target = Store(localURL: targetRoot.appendingPathComponent("local.json"))
+        let imported = try await target.importProjectFile(from: old)
+        XCTAssertEqual(imported.name, source.project.name)
+        XCTAssertEqual(target.rooms.count, source.rooms.count)
+        XCTAssertEqual(target.annotations.count, source.items.count + 3)
     }
     func testMalformedImportLeavesExistingDataAndAssetsUntouched() async throws {
         let root = try folder()

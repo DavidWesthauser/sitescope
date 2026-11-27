@@ -140,7 +140,7 @@ extension ARController {
         mode = .editing
         showSurfaceGuides = false
         scannedThisSession = true
-        localization.propose(.identity, method: .map)
+        localization.propose(.identity)
         localization.confirm(normalTracking: trackingNormal)
         render()
         refreshSurfaceVisuals()

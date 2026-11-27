@@ -294,8 +294,7 @@ extension Store {
                 let old = data.rooms[i]
                 if old.map_path != nil
                     && (old.map_path != room.map_path || old.scan_guide_jpeg != room.scan_guide_jpeg
-                        || old.marker != room.marker || old.reference_points != room.reference_points
-                        || old.reference_notes != room.reference_notes || old.surfaces != room.surfaces)
+                        || old.surfaces != room.surfaces)
                 {
                     throw AppError.message("Published room maps cannot be replaced. Create a new room for remapping.")
                 }
@@ -341,26 +340,19 @@ extension Store {
         guard let saved = projects.first(where: { $0.id == project.id }) else {
             throw AppError.message("Project no longer exists.")
         }
-        var exportedRooms = rooms.filter { $0.project_id == saved.id }
-        // The current workflow uses room-map recognition; obsolete recovery targets are not transferred.
-        for index in exportedRooms.indices {
-            exportedRooms[index].marker = nil
-            exportedRooms[index].reference_points = []
-            exportedRooms[index].reference_notes = ""
-        }
+        let exportedRooms = rooms.filter { $0.project_id == saved.id }
         let roomIDs = Set(exportedRooms.map(\.id))
         let exportedAnnotations = annotations.filter { roomIDs.contains($0.room_id) }
         let assetRoot = localURL.deletingLastPathComponent().appendingPathComponent("assets", isDirectory: true)
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent(
             "sitescope-Export-\(UUID().uuidString)", isDirectory: true)
         let file = destination.appendingPathComponent("sitescope-\(saved.id.uuidString.prefix(8)).sitescope")
-        let snapshotRooms = exportedRooms
         return try await Task.detached(priority: .userInitiated) {
             do {
                 try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
                 try FileManager.default.createDirectory(at: assetRoot, withIntermediateDirectories: true)
                 try ProjectTransferArchive.write(
-                    project: saved, rooms: snapshotRooms, annotations: exportedAnnotations, assetRoot: assetRoot,
+                    project: saved, rooms: exportedRooms, annotations: exportedAnnotations, assetRoot: assetRoot,
                     to: file)
                 return file
             } catch {
@@ -422,9 +414,6 @@ extension Store {
                 room.id = id
                 room.project_id = project.id
                 room.name = try name(original.name)
-                room.marker = nil
-                room.reference_points = []
-                room.reference_notes = ""
                 room.map_path = try original.map_path.map(remap)
                 try room.validate()
                 importedRooms.append(room)

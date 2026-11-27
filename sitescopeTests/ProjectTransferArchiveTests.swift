@@ -45,11 +45,8 @@ final class ProjectTransferArchiveTests: XCTestCase {
         return file
     }
 
-    func testRoundTripStreamsDiskAssetsAndOmitsLegacyMarker() throws {
-        let (project, original, task, map) = try fixture()
-        var room = original
-        room.marker = Marker(
-            id: UUID(), image_path: "old-missing-marker.png", width: 0.1, height: 0.1, room_from_marker: .identity)
+    func testRoundTripStreamsDiskAssets() throws {
+        let (project, room, task, map) = try fixture()
         let archive = root.appendingPathComponent("project.sitescope")
         try ProjectTransferArchive.write(
             project: project, rooms: [room], annotations: [task], assetRoot: root, to: archive)
@@ -67,6 +64,53 @@ final class ProjectTransferArchiveTests: XCTestCase {
         XCTAssertThrowsError(
             try ProjectTransferArchive.write(
                 project: project, rooms: [room], annotations: [task], assetRoot: root, to: archive))
+    }
+
+    /// Archives exported before T-027 carry the removed room fields and may hold text, arrow or marker notes.
+    func testArchiveFromBeforeCleanupStillOpens() throws {
+        let (project, room, task, _) = try fixture()
+        let archive = root.appendingPathComponent("old.sitescope")
+        try ProjectTransferArchive.write(
+            project: project, rooms: [room], annotations: [task], assetRoot: root, to: archive)
+        let old = try Self.addingLegacyFields(to: archive, roomID: room.id, coordinateID: room.coordinate_id)
+        let manifest = try ProjectTransferArchive.read(from: old, extractTo: root.appendingPathComponent("imported"))
+        XCTAssertEqual(manifest.rooms, [room])
+        XCTAssertEqual(Set(manifest.annotations.map(\.kind)), [.image, .text, .arrow, .marker])
+    }
+
+    /// Rewrites an archive's manifest the way an older build wrote it; the asset bytes stay unchanged.
+    static func addingLegacyFields(to archive: URL, roomID: UUID, coordinateID: UUID) throws -> URL {
+        let data = try Data(contentsOf: archive)
+        let length = data[8..<16].enumerated().reduce(0) { $0 | (Int($1.element) << ($1.offset * 8)) }
+        var manifest = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data[16..<(16 + length)]) as? [String: Any])
+        var rooms = try XCTUnwrap(manifest["rooms"] as? [[String: Any]])
+        rooms[0]["marker"] = [
+            "id": UUID().uuidString, "image_path": "old-missing-marker.png", "width": 0.1, "height": 0.1,
+            "room_from_marker": Pose.identity.elements,
+        ]
+        rooms[0]["reference_points"] = [["x": 0, "y": 0, "z": 0], ["x": 1, "y": 0, "z": 0]]
+        rooms[0]["reference_notes"] = "Two corners"
+        manifest["rooms"] = rooms
+        var annotations = try XCTUnwrap(manifest["annotations"] as? [[String: Any]])
+        for (kind, points) in [("text", 0), ("arrow", 2), ("marker", 0)] {
+            annotations.append([
+                "id": UUID().uuidString, "room_id": roomID.uuidString, "coordinate_id": coordinateID.uuidString,
+                "kind": kind, "pose": Pose.identity.elements,
+                "points": (0..<points).map { ["x": Float($0), "y": 0, "z": 0] }, "title": "Old \(kind) note",
+                "detail": "", "status": "todo", "priority": 1,
+            ])
+        }
+        manifest["annotations"] = annotations
+        let json = try JSONSerialization.data(withJSONObject: manifest)
+        var result = Data("sscope01".utf8)
+        var size = UInt64(json.count).littleEndian
+        withUnsafeBytes(of: &size) { result.append(contentsOf: $0) }
+        result.append(json)
+        result.append(data[(16 + length)...])
+        let file = archive.deletingLastPathComponent().appendingPathComponent(UUID().uuidString + ".sitescope")
+        try result.write(to: file)
+        return file
     }
 
     func testCorruptTruncatedAndTrailingBytesRollBack() throws {

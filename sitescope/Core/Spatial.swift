@@ -2,7 +2,7 @@ import Foundation
 import simd
 
 public enum SpatialError: Error, LocalizedError {
-    case invalidTransform, invalidGeometry, incompatibleVersion, degenerateReference
+    case invalidTransform, invalidGeometry, incompatibleVersion
     public var errorDescription: String? {
         "Spatial data is invalid or incompatible. Open the room again or ask its manager to repair it."
     }
@@ -61,40 +61,14 @@ public struct Point3: Codable, Equatable, Sendable {
     public var vector: SIMD3<Float> { SIMD3(x, y, z) }
 }
 
-public enum AlignmentMath {
-    /// sessionFromRoom = sessionFromMarker × inverse(roomFromMarker).
-    public static func marker(sessionFromMarker: Pose, roomFromMarker: Pose) throws -> Pose {
-        try Pose(sessionFromMarker.matrix * simd_inverse(roomFromMarker.matrix))
-    }
-    /// Gravity-aligned two-point recovery. Points must be at least 30 cm apart horizontally.
-    /// Only yaw is solved: the room's up axis is trusted to match ARKit's gravity, so the
-    /// vertical offset between the two points must be small.
-    public static func manual(room: [Point3], session: [Point3]) throws -> Pose {
-        guard room.count == 2, session.count == 2 else { throw SpatialError.degenerateReference }
-        let a = room[1].vector - room[0].vector
-        let b = session[1].vector - session[0].vector
-        guard simd_length(SIMD2(a.x, a.z)) > 0.3, simd_length(SIMD2(b.x, b.z)) > 0.3,
-            abs(simd_length(a) - simd_length(b)) < 0.15,
-            abs(a.y - b.y) < 0.1
-        else { throw SpatialError.degenerateReference }
-        // Yaw is the angle between the two horizontal baselines; the rotation is about the Y (up) axis.
-        let angle = atan2(a.z, a.x) - atan2(b.z, b.x)
-        var m = simd_float4x4(simd_quatf(angle: angle, axis: SIMD3(0, 1, 0)))
-        // Translation moves the rotated room origin onto the session origin, so the first point matches exactly.
-        m.columns.3 = SIMD4(session[0].vector - (m * SIMD4(room[0].vector, 1)).xyz, 1)
-        return try Pose(m)
-    }
-}
 extension SIMD4 where Scalar == Float { public var xyz: SIMD3<Float> { SIMD3(x, y, z) } }
 
 public enum LocalizationState: String, Sendable { case searching, relocalizing, verifying, aligned, lost, failed }
-public enum AlignmentMethod: String, Sendable { case map, marker, manual }
-/// Map recovery needs restored anchors and stable normal tracking. Fallback candidates require confirmation.
+/// Map recovery needs restored anchors and stable normal tracking; a proposed alignment still needs confirmation.
 /// Only an `aligned` state exposes `roomToSession`, so saved drawings stay hidden until alignment is confirmed.
 public struct Localization: Sendable {
     public private(set) var state: LocalizationState = .searching
     public private(set) var candidate: Pose?
-    public private(set) var method: AlignmentMethod?
     public private(set) var searchTimedOut = false
     public init() {}
     public var roomToSession: Pose? { state == .aligned ? candidate : nil }
@@ -102,10 +76,9 @@ public struct Localization: Sendable {
         self = Localization()
         state = .relocalizing
     }
-    public mutating func propose(_ pose: Pose, method: AlignmentMethod) {
+    public mutating func propose(_ pose: Pose) {
         searchTimedOut = false
         candidate = pose
-        self.method = method
         state = .verifying
     }
     public mutating func confirm(normalTracking: Bool) {
@@ -117,7 +90,7 @@ public struct Localization: Sendable {
         guard state == .relocalizing || (state == .failed && searchTimedOut),
             restoredRoomAnchor, normalTracking, stableSeconds >= 2, mapAvailable
         else { return false }
-        propose(.identity, method: .map)
+        propose(.identity)
         confirm(normalTracking: true)
         return true
     }
@@ -131,7 +104,6 @@ public struct Localization: Sendable {
     public mutating func lose() {
         searchTimedOut = false
         candidate = nil
-        method = nil
         state = .lost
     }
     public mutating func fail() {

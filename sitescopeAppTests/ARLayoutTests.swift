@@ -82,7 +82,7 @@
                 }
                 if ["draw-editor", "area-editor", "image-empty", "image-loaded", "worker-aligned"].contains(name) {
                     ar.trackingNormal = true
-                    ar.localization.propose(.identity, method: .map)
+                    ar.localization.propose(.identity)
                     ar.confirm()
                 }
                 if name == "tracking-lost" { ar.localization.lose() }
@@ -252,7 +252,7 @@
             }
             let ar = ARController(room: room, mode: .walkthrough)
             ar.trackingNormal = true
-            ar.localization.propose(.identity, method: .map)
+            ar.localization.propose(.identity)
             ar.confirm()
             await ar.reload(items, store: store)
             XCTAssertEqual(ar.cachedImageTextureCount, 2)
@@ -363,7 +363,7 @@
             ar.annotations = [
                 Annotation(room: room, kind: .text, pose: .identity, title: "Wall instruction", detail: "")
             ]
-            ar.localization.propose(.identity, method: .map)
+            ar.localization.propose(.identity)
             ar.confirm()
             XCTAssertFalse(ar.view.scene.anchors.isEmpty)
             let sentinel = ARAnchor(
@@ -423,7 +423,7 @@
             }
             let ar = ARController(room: room, mode: .walkthrough)
             ar.trackingNormal = true
-            ar.localization.propose(.identity, method: .map)
+            ar.localization.propose(.identity)
             ar.confirm()
             await ar.reload(items, store: store)
             XCTAssertEqual(ar.cachedImageTextureCount, ARController.maximumImageTextures)
@@ -443,14 +443,14 @@
             ar.annotations = [
                 Annotation(room: room, kind: .text, pose: .identity, title: "Wall instruction", detail: "")
             ]
-            ar.localization.propose(.identity, method: .map)
+            ar.localization.propose(.identity)
             ar.confirm()
             let built = try XCTUnwrap(ar.view.scene.anchors.first)
             let sentinel = ARAnchor(
                 name: "sitescope.room.\(room.coordinate_id.uuidString)", transform: matrix_identity_float4x4)
             ar.session(ar.view.session, didRemove: [sentinel])
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
-            ar.localization.propose(.identity, method: .map)
+            ar.localization.propose(.identity)
             ar.confirm()
             XCTAssertTrue(ar.view.scene.anchors.first === built)  // Recovery re-attaches; no mesh regeneration.
             ar.annotations.append(
@@ -527,7 +527,7 @@
             XCTAssertEqual(restoredBytes, bytes)
             let restored = try await SpatialImageAsset.prepare(restoredBytes)
             XCTAssertEqual(restored.image.size, ar.draftImage?.size)
-            ar.localization.propose(.identity, method: .map)
+            ar.localization.propose(.identity)
             ar.confirm()
             await ar.reload([drawing, image], store: store)
             let roots = ar.view.scene.anchors.flatMap { Array($0.children) }
