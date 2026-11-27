@@ -1,8 +1,8 @@
-# Database and API reference
+# Database and API reference (draft schema)
 
 How a client or AI agent reads and writes sitescope data through the Supabase API.
 
-**Status (2026-11-27):** implemented in [`supabase/migrations/20261127120000_schema.sql`](../supabase/migrations/20261127120000_schema.sql) and checked by `supabase/tests/access.test.sql` (pgTAP, local stack). Not deployed to the hosted project yet (H-003). The app uses projects, one default house per project, rooms, annotations and project-wide `external` grants; house, role and comment screens come with T-005, T-006 and T-011. Open product decisions are listed at the end.
+**Status (2026-11-26):** describes the **draft** schema in [database_schema_draft.sql](database_schema_draft.sql) (projects → houses → rooms, roles, comments). It is **not a migration yet** and not deployed; the app still uses `supabase/migrations/` (projects → rooms, owner/member). Verified on plain PostgreSQL 16 with a stubbed `auth` schema only. Open product decisions are listed at the end. Storage policies for the new model are not written yet. Turning this into migrations belongs to T-005/T-006.
 
 ## Rules for agents
 
@@ -42,7 +42,7 @@ The app implements these in `sitescope/Services/Backend.swift`. `auth.uid()` in 
 ```
 organizations ─┬─ profiles (user_id = auth.users.id)
                │
-projects ── houses ── rooms ── annotations
+projects ── houses ── rooms
    │          │        │
    └── access_grants (scope: project | house | room)
    └── comments      (scope: project | house | room, replies via parent_id)
@@ -59,15 +59,11 @@ All ids are `uuid`, all timestamps `timestamptz`. "auto" = set by the server.
 
 **houses**: `id`, `project_id`, `name` (1–120), `responsible_id` (defaults to creator; may be set to another user at creation), `created_by`/`created_by_org`/`created_at` auto.
 
-**rooms**: `id`, `house_id`, `project_id` (must match the house's project), `name` (1–120), `height`/`length`/`width` (metres, `numeric(6,2)`, > 0, nullable), `area` (generated: `length * width`, read-only), `status` (`planned`|`in_progress`|`built`, default `planned`), `responsible_id` (defaults to creator), `created_by`/`created_by_org`/`created_at` auto. AR columns, mirroring `Room` in `sitescope/Core/Models.swift`: `spatial_version`, `coordinate_id` (fixed after insert), `map_path`, `scan_guide_jpeg`, `marker`, `reference_points`, `reference_notes`, `surfaces`. Once `map_path` is set, none of them can change (trigger `preserve_room_map`): a changed room becomes a new room.
+**rooms**: `id`, `house_id`, `project_id` (must match the house's project), `name` (1–120), `height`/`length`/`width` (metres, `numeric(6,2)`, > 0, nullable), `area` (generated: `length * width`, read-only), `status` (`planned`|`in_progress`|`built`, default `planned`), `responsible_id` (defaults to creator), `created_by`/`created_by_org`/`created_at` auto. The existing AR columns (`coordinate_id`, `map_path`, `marker`, `surfaces`, …) are not merged yet.
 
 **access_grants**: `id`, `user_id`, `role` (`member`|`external`), `project_id`, `house_id`, `room_id`, `created_by`, `created_at`. Scope: only `project_id` set → whole project; `house_id` set → whole house; `room_id` set → one room. Grants on a project or house also cover houses and rooms created later. One grant per user and scope.
 
 **comments**: `id`, `author_id` auto, `project_id`, `house_id`, `room_id` (same scope rule; set the ids of the level the comment belongs to, e.g. all three for a room), `parent_id` (null = top-level; a reply must have the same scope as its parent), `body` (1–2000, optional), `image_path`, `audio_path` (at least one of body/image/audio), `is_hidden`/`hidden_by`/`hidden_at` (admin only, via RPC), `created_at` auto. No editing; deleting a comment deletes its replies.
-
-**annotations** (spatial notes and tasks): `id`, `room_id`, `coordinate_id` (must be the room's; the room must be mapped), `kind`, `pose`, `points`, `strokes`, `image` (JSON as in `Annotation`), `title` (1–240), `detail`, `status` (`todo`|`in_progress`|`completed`), `priority` (0–2), `created_by`/`created_at` auto.
-
-The app calls the responsible person of a project its "owner" and a person with an `external` project grant a "worker". Its client-side shapes are in `sitescope/Services/CloudRecords.swift`.
 
 Counts are not stored. Ask for them: `houses?select=*,rooms(count)`.
 
@@ -94,12 +90,6 @@ Levels per scope: **4 admin** (global, table `admins`) · **3 responsible** (`re
 | Read / write comments | ≥ 1 on the comment's scope; hidden comments only for admins |
 | Delete comment | own comment, or ≥ 3 on its scope |
 | Hide comment | admin |
-| Read notes | ≥ 1 on the room |
-| Create / edit / delete notes | ≥ 2 on the room |
-| Change a note's status | ≥ 1 on the room, through `set_task_status` |
-| Read room files (storage) | ≥ 1 on the room |
-| Upload room files | ≥ 2 on the room; files are never overwritten |
-| Delete room files | ≥ 3 on the room |
 | Read profiles | every signed-in user (name and organization) |
 | Edit own profile | `display_name` only |
 | Change `organization_id` / `is_active` | admin |
@@ -114,12 +104,12 @@ RLS filters silently: rows you may not see are simply missing, not an error.
 GET /rest/v1/projects?select=*&order=created_at.desc
 GET /rest/v1/houses?select=*,rooms(count)&project_id=eq.<id>
 GET /rest/v1/rooms?select=*&house_id=eq.<id>&status=eq.in_progress
-GET /rest/v1/comments?select=*,author:profiles!comments_author_id_fkey(display_name)&room_id=eq.<id>&order=created_at.asc
+GET /rest/v1/comments?select=*,author:profiles!author_id(display_name)&room_id=eq.<id>&order=created_at.asc
 GET /rest/v1/comments?select=*&project_id=eq.<id>&house_id=is.null     (project-level comments only)
-GET /rest/v1/access_grants?select=*,user:profiles!access_grants_user_id_fkey(display_name)&house_id=eq.<id>
+GET /rest/v1/access_grants?select=*,user:profiles!user_id(display_name)&house_id=eq.<id>
 ```
 
-`comments`, `access_grants` and `organizations` have more than one foreign key to `profiles`; name the foreign key in the embed (`profiles!comments_author_id_fkey(...)`).
+`comments`, `access_grants` and `organizations` have more than one foreign key to `profiles`; name the column in the embed (`profiles!author_id(...)`).
 
 ## Writing data
 
@@ -134,31 +124,20 @@ POST   /rest/v1/comments   {"project_id":"…","house_id":"…","room_id":"…",
 
 Add header `Prefer: return=representation` to get the written row back. A `PATCH` or `DELETE` that the user may not perform affects 0 rows and still returns `200`/`204`: check that the returned array is not empty. An `INSERT` that violates a policy returns `403` with code `42501`.
 
-Updatable columns: projects and houses `name`, `responsible_id`; rooms `name`, `height`, `length`, `width`, `status`, `responsible_id` and the AR columns except `coordinate_id`; annotations everything except `id`, `room_id`, `coordinate_id`; profiles `display_name`; organizations `name`, `status`, `responsible_id`. Everything else is fixed after insert.
+Updatable columns: projects and houses `name`, `responsible_id`; rooms `name`, `height`, `length`, `width`, `status`, `responsible_id`; profiles `display_name`; organizations `name`, `status`, `responsible_id`. Everything else is fixed after insert.
 
 ## RPCs
 
 | Function | Arguments | Effect / errors |
 |---|---|---|
-| `grant_access` | `target_email`, `new_role` (`member`\|`external`), `p` project id, `h` house id (optional), `r` room id (optional) | Adds or changes a grant. Errors: not responsible (`42501`), no active account with this email, ids that do not belong together |
+| `grant_access` | `target_email`, `new_role` (`member`\|`external`), `p` project id, `h` house id or null, `r` room id or null | Adds or changes a grant. Errors: not responsible (`42501`), no active account with this email, ids that do not belong together |
 | `revoke_access` | `grant_id` | Deletes a grant. Error `42501` if not allowed or not found |
-| `set_task_status` | `task`, `new_status` | Changes only a note's status; needs level ≥ 1 on its room |
 | `set_comment_hidden` | `comment`, `hidden` (bool) | Admin only |
-| `scope_level` | `p`, `h` (optional), `r` (optional) | The caller's level (0–4) on that scope; ids that do not belong together give 0. Use it to show or hide UI controls |
-| `room_level` | `r` | Same for a room, looked up from its project and house |
+| `scope_level` | `p`, `h`, `r` | The caller's level (0–4) on that scope; use it to show or hide UI controls |
 | `project_level` | `p` | Same for a project |
 | `is_admin`, `is_active_user` | none | Booleans for the caller |
 
 Example: `POST /rest/v1/rpc/grant_access` `{"target_email":"anna@firma.de","new_role":"external","p":"…","h":"…","r":"…"}`.
-
-## Storage
-
-Private bucket `room-assets` (100 MB per file). Object names are `<project_id>/<room_id>/<file>`; any other shape, or a room outside the named project, gives level 0 (`asset_level`).
-
-```
-POST /storage/v1/object/room-assets/<project_id>/<room_id>/<uuid>.worldmap      upload (level ≥ 2)
-GET  /storage/v1/object/authenticated/room-assets/<project_id>/<room_id>/<file>  download (level ≥ 1)
-```
 
 ## Errors
 
@@ -179,4 +158,4 @@ PostgREST error bodies are `{"code","message","details","hint"}`.
 - Whether every user may read all profiles (now: yes).
 - Final room `status` values.
 - Rights of an organization's `responsible_id` (now: none).
-- Storage paths are `<project_id>/<room_id>/<file>` (what the app already writes); policies use the room level. Confirm or change before files exist on the hosted project.
+- Storage: paths must start with `<room_id>/` and policies must use `scope_level`; not written yet.
