@@ -83,7 +83,7 @@ extension ARController {
         }
     }
     @objc func dragged(_ recognizer: UIPanGestureRecognizer) {
-        guard mode == .editing, [.line, .arrow].contains(tool) else { return }
+        guard mode == .editing, tool == .line else { return }
         switch recognizer.state {
         case .began:
             beginStroke()
@@ -164,13 +164,8 @@ extension ARController {
     }
     private func appendPoint(_ point: Point3) {
         switch tool {
-        case .text, .marker, .image: draft = [point]
-        case .arrow:
-            if draft.isEmpty {
-                draft = [point]
-            } else if simd_distance(draft[0].vector, point.vector) > 0.02 {
-                if draft.count == 1 { draft.append(point) } else { draft = [draft[0], point] }
-            }
+        case .image: draft = [point]
+        case .marker, .text, .arrow: return  // Legacy kinds are never drafted.
         case .line:
             lineDraft.append(point)
             draft = lineDraft.points
@@ -225,7 +220,7 @@ extension ARController {
                 }
                 self.frozenFrame = FrozenDrawingFrame(
                     image: image, viewProjection: vp, viewport: viewport, sessionFromRoom: alignment)
-                self.guidance = "View locked. Draw or type on this fixed surface, then resume the camera."
+                self.guidance = "View locked. Draw on this fixed surface, then resume the camera."
             }
         }
     }

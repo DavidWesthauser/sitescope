@@ -48,6 +48,9 @@ public struct Room: Codable, Identifiable, Equatable, Sendable {
         }
     }
 }
+/// New notes are `line`, `area` or `image`. `marker`, `text` and `arrow` come from older builds: they are still
+/// decoded and shown, never created. An unknown kind would make a whole local file unreadable, so they can only go
+/// once H-001 shows whether real data contains them (T-027).
 public enum AnnotationKind: String, Codable, CaseIterable, Sendable { case marker, text, area, line, arrow, image }
 public enum TaskStatus: String, Codable, CaseIterable, Sendable {
     case todo

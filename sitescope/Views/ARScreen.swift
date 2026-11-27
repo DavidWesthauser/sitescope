@@ -219,7 +219,6 @@ struct ARScreen: View {
         .task(id: room.scan_guide_jpeg) { scanGuideImage = room.scan_guide_jpeg.flatMap(ScanGuideImage.thumbnail) }
         .onDisappear { ar.stop() }
         .modifier(ARSessionFeedback(ar: ar))
-        .onChange(of: title) { _, value in ar.draftText = value }
         .sheet(isPresented: $showingWorkDetails) {
             DrawingWorkDetails(title: $title, details: $detail, priority: $priority)
         }

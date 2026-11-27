@@ -42,7 +42,6 @@ struct FrozenDrawingFrame {
     var lastDraftRender: CFTimeInterval = 0
     var aimPoint: CGPoint?
     var imageHeight: Float { imageWidth * Float((draftImage?.size.height ?? 1) / (draftImage?.size.width ?? 1)) }
-    @Published var draftText = "" { didSet { renderDraft() } }
     @Published var frozenFrame: FrozenDrawingFrame?
     @Published var drawingPlane: Pose?  // roomFromDrawingPlane; immutable for this stroke.
     @Published var selected: Annotation?

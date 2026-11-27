@@ -25,33 +25,9 @@ struct FrozenDrawingView: View {
                         return CGPoint(x: CGFloat(p.x) * size.width, y: CGFloat(p.y) * size.height)
                     }
                     let p = ar.draft.compactMap { project($0.vector) }
-                    guard let first = p.first else { return }
+                    guard !p.isEmpty else { return }
                     switch ar.tool {
-                    case .text:
-                        context.draw(
-                            Text(ar.draftText.isEmpty ? "Text" : ar.draftText).font(
-                                .system(size: 22, weight: .semibold)
-                            ).foregroundStyle(.orange), at: first, anchor: .topLeading)
-                    case .marker:
-                        context.stroke(
-                            Path(ellipseIn: CGRect(x: first.x - 7, y: first.y - 7, width: 14, height: 14)),
-                            with: .color(.orange), lineWidth: 3)
-                    case .arrow:
-                        guard let tail = ar.draft.first, let tip = ar.draft.last, ar.draft.count >= 2,
-                            let arrow = DrawingGeometry.arrow(
-                                tail: tail.vector, tip: tip.vector,
-                                normal: ar.drawingPlane?.matrix.columns.2.xyz ?? SIMD3(0, 0, 1)),
-                            let tipPoint = project(arrow.tip), let left = project(arrow.left),
-                            let right = project(arrow.right), let base = project((arrow.left + arrow.right) / 2)
-                        else { return }
-                        var shaft = Path()
-                        shaft.move(to: first)
-                        shaft.addLine(to: base)
-                        context.stroke(shaft, with: .color(.orange), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        var head = Path()
-                        head.addLines([tipPoint, left, right])
-                        head.closeSubpath()
-                        context.fill(head, with: .color(.orange))
+                    case .marker, .text, .arrow: break  // Legacy kinds are never drafted.
                     case .line:
                         for stroke in ar.lineDraft.strokes where stroke.count >= 2 {
                             var path = Path()
@@ -96,7 +72,7 @@ struct FrozenDrawingView: View {
             }.contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0).onChanged { value in
-                        if ar.tool == .line || ar.tool == .arrow {
+                        if ar.tool == .line {
                             ar.beginStroke()
                             capture(value.location, in: geometry.size)
                         }

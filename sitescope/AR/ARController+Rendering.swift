@@ -68,20 +68,7 @@ extension ARController {
                 addImage(texture, width: imageWidth, height: imageHeight, to: root)
                 anchor.addChild(root)
             }
-        case .arrow:
-            if let last = draft.last, draft.count >= 2 {
-                addArrow(
-                    first.vector, last.vector, normal: drawingPlane?.matrix.columns.2.xyz ?? SIMD3(0, 0, 1), to: anchor,
-                    color: .systemOrange)
-            }
-        case .marker: anchor.addChild(dot(first.vector, color: .systemOrange, radius: 0.025))
-        case .text:
-            let text = Entity()
-            var pose = drawingPlane?.matrix ?? matrix_identity_float4x4
-            pose.columns.3 = SIMD4(first.vector, 1)
-            text.transform = Transform(matrix: pose)
-            text.addChild(label(draftText.isEmpty ? "Text" : draftText, at: .zero, color: .systemOrange))
-            anchor.addChild(text)
+        case .marker, .text, .arrow: break  // Legacy kinds are shown when saved but never drafted.
         }
         preview = anchor
         view.scene.addAnchor(anchor)
