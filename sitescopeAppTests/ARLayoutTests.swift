@@ -82,8 +82,7 @@
                 }
                 if ["draw-editor", "area-editor", "image-empty", "image-loaded", "worker-aligned"].contains(name) {
                     ar.trackingNormal = true
-                    ar.localization.propose(.identity)
-                    ar.confirm()
+                    ar.alignForTesting()
                 }
                 if name == "tracking-lost" { ar.localization.lose() }
                 if name == "motion-limited" || name == "features-limited" {
@@ -252,17 +251,16 @@
             }
             let ar = ARController(room: room, mode: .walkthrough)
             ar.trackingNormal = true
-            ar.localization.propose(.identity)
-            ar.confirm()
+            ar.alignForTesting()
             await ar.reload(items, store: store)
-            XCTAssertEqual(ar.cachedImageTextureCount, 2)
+            XCTAssertEqual(ar.imageTextures.count, 2)
             await ar.reload([items[1]], store: store)
-            XCTAssertEqual(ar.cachedImageTextureCount, 1)
+            XCTAssertEqual(ar.imageTextures.count, 1)
             ar.stop()
-            XCTAssertEqual(ar.cachedImageTextureCount, 0)
+            XCTAssertEqual(ar.imageTextures.count, 0)
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
             await ar.reload(items, store: store)
-            XCTAssertEqual(ar.cachedImageTextureCount, 0)
+            XCTAssertEqual(ar.imageTextures.count, 0)
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
         }
         func testLongScanRenderingAndMemoryFallbackStayBounded() throws {
@@ -279,7 +277,7 @@
                 ar.updateSurfacePatch(
                     SurfacePatch(id: UUID(), pose: try Pose(matrix), vertices: vertices, vertical: false))
             }
-            XCTAssertEqual(ar.cachedSurfaceCount, 128)
+            XCTAssertEqual(ar.detectedSurfaces.count, 128)
             ar.renderScanSurfaces()
             XCTAssertEqual(ar.view.scene.anchors.count, 24)
             XCTAssertEqual(ar.view.scene.anchors.reduce(0, { $0 + $1.children.count }), 48)
@@ -293,14 +291,14 @@
             let pose = try Pose(distantPose)
             // Excluded from the nearest metadata cache.
             ar.updateSurfacePatch(SurfacePatch(id: targetID, pose: pose, vertices: vertices, vertical: false))
-            XCTAssertEqual(ar.cachedSurfaceCount, 128)
+            XCTAssertEqual(ar.detectedSurfaces.count, 128)
             XCTAssertFalse(ar.placementSurfaceIsReady(id: targetID, pose: pose, at: 0))
             XCTAssertTrue(ar.placementSurfaceIsReady(id: targetID, pose: pose, at: 0.7))
             ar.reduceScanLoad()
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
             XCTAssertTrue(ar.renderingReduced)
             XCTAssertEqual(ar.annotations, [instruction])
-            XCTAssertEqual(ar.cachedSurfaceCount, 128)
+            XCTAssertEqual(ar.detectedSurfaces.count, 128)
             ar.renderScanSurfaces()
             XCTAssertEqual(ar.view.scene.anchors.count, 12)
             XCTAssertEqual(ar.view.scene.anchors.reduce(0, { $0 + $1.children.count }), 12)
@@ -350,7 +348,7 @@
             XCTAssertTrue(ar.placementSurfaceIsReady(id: patch.id, pose: .identity, at: 1.5))
             patch.vertices = []
             ar.updateSurfacePatch(patch)
-            XCTAssertEqual(ar.cachedSurfaceCount, 0)
+            XCTAssertEqual(ar.detectedSurfaces.count, 0)
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
             XCTAssertTrue(ar.scan.surfaces.isEmpty)
             XCTAssertFalse(ar.placementSurfaceIsReady(id: patch.id, pose: .identity, at: 1.6))
@@ -361,10 +359,11 @@
             let ar = ARController(room: room, mode: .walkthrough)
             ar.updateTracking(.none)
             ar.annotations = [
-                Annotation(room: room, kind: .text, pose: .identity, title: "Wall instruction", detail: "")
+                Annotation(
+                    room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))],
+                    title: "Wall instruction", detail: "")
             ]
-            ar.localization.propose(.identity)
-            ar.confirm()
+            ar.alignForTesting()
             XCTAssertFalse(ar.view.scene.anchors.isEmpty)
             let sentinel = ARAnchor(
                 name: "sitescope.room.\(room.coordinate_id.uuidString)", transform: matrix_identity_float4x4)
@@ -423,10 +422,9 @@
             }
             let ar = ARController(room: room, mode: .walkthrough)
             ar.trackingNormal = true
-            ar.localization.propose(.identity)
-            ar.confirm()
+            ar.alignForTesting()
             await ar.reload(items, store: store)
-            XCTAssertEqual(ar.cachedImageTextureCount, ARController.maximumImageTextures)
+            XCTAssertEqual(ar.imageTextures.count, ARController.maximumImageTextures)
             XCTAssertEqual(ar.hiddenImageCount, 3)
             let content = try XCTUnwrap(ar.view.scene.anchors.first)
             // Every instruction is still placed; overflow renders as an outline.
@@ -441,20 +439,22 @@
             let ar = ARController(room: room, mode: .walkthrough)
             ar.updateTracking(.none)
             ar.annotations = [
-                Annotation(room: room, kind: .text, pose: .identity, title: "Wall instruction", detail: "")
+                Annotation(
+                    room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))],
+                    title: "Wall instruction", detail: "")
             ]
-            ar.localization.propose(.identity)
-            ar.confirm()
+            ar.alignForTesting()
             let built = try XCTUnwrap(ar.view.scene.anchors.first)
             let sentinel = ARAnchor(
                 name: "sitescope.room.\(room.coordinate_id.uuidString)", transform: matrix_identity_float4x4)
             ar.session(ar.view.session, didRemove: [sentinel])
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
-            ar.localization.propose(.identity)
-            ar.confirm()
+            ar.alignForTesting()
             XCTAssertTrue(ar.view.scene.anchors.first === built)  // Recovery re-attaches; no mesh regeneration.
             ar.annotations.append(
-                Annotation(room: room, kind: .text, pose: .identity, title: "Second instruction", detail: ""))
+                Annotation(
+                    room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))],
+                    title: "Second instruction", detail: ""))
             ar.render()
             XCTAssertEqual(ar.view.scene.anchors.count, 1)
             XCTAssertFalse(ar.view.scene.anchors.first === built)
@@ -527,8 +527,7 @@
             XCTAssertEqual(restoredBytes, bytes)
             let restored = try await SpatialImageAsset.prepare(restoredBytes)
             XCTAssertEqual(restored.image.size, ar.draftImage?.size)
-            ar.localization.propose(.identity)
-            ar.confirm()
+            ar.alignForTesting()
             await ar.reload([drawing, image], store: store)
             let roots = ar.view.scene.anchors.flatMap { Array($0.children) }
             // Two disconnected tube meshes.
@@ -583,6 +582,39 @@
             attachment.name = name
             attachment.lifetime = .keepAlways
             add(attachment)
+        }
+    }
+    extension ARLayoutTests {
+        func testSavedShapesAndLegacyArrowRenderWithoutControlDots() throws {
+            let room = Room(project_id: UUID(), name: "Rendering fixture")
+            let ar = ARController(room: room, mode: .walkthrough)
+            ar.trackingNormal = true
+            let points = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(1, 1, 0))]
+            let line = Annotation(
+                room: room, kind: .line, pose: .identity, points: points, title: "Drawing", detail: "")
+            let area = Annotation(
+                room: room, kind: .area, pose: .identity, points: points, title: "Area marking", detail: "")
+            let arrow = Annotation(
+                room: room, kind: .arrow, pose: .identity, points: [points[0], points[2]], title: "Drawing", detail: "")
+            ar.annotations = [line, area, arrow]
+            ar.alignForTesting()
+            let roots = ar.view.scene.anchors.flatMap { Array($0.children) }
+            XCTAssertEqual(roots.first(where: { $0.name == line.id.uuidString })?.children.count, 1)
+            XCTAssertEqual(roots.first(where: { $0.name == area.id.uuidString })?.children.count, 3)
+            XCTAssertEqual(roots.first(where: { $0.name == arrow.id.uuidString })?.children.count, 2)
+            XCTAssertFalse(ar.showSurfaceGuides)
+            ar.stop()
+        }
+    }
+
+    extension ARController {
+        /// Aligns the room at the identity and shows saved drawings, as recognizing a saved map does.
+        func alignForTesting() {
+            localization.propose(.identity)
+            localization.confirm(normalTracking: trackingNormal)
+            render()
+            renderDraft()
+            refreshSurfaceVisuals()
         }
     }
 #endif

@@ -363,8 +363,8 @@ final class ScreenshotTour: XCTestCase {
         func task(_ n: Int, _ title: String, _ detail: String, _ status: String, _ priority: Int) -> String {
             """
             {"id": "40000000-0000-0000-0000-00000000000\(n)", "room_id": "\(kitchen)",
-             "coordinate_id": "\(kitchenCoordinate)", "kind": "text", "pose": \(identity),
-             "points": [], "title": "\(title)", "detail": "\(detail)", "status": "\(status)", "priority": \(priority)}
+             "coordinate_id": "\(kitchenCoordinate)", "kind": "line", "pose": \(identity),
+             "points": [{"x": 0, "y": 0, "z": 0}, {"x": 0.5, "y": 0, "z": 0}], "title": "\(title)", "detail": "\(detail)", "status": "\(status)", "priority": \(priority)}
             """
         }
         return """

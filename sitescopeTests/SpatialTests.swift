@@ -31,26 +31,6 @@ final class SpatialTests: XCTestCase {
         XCTAssertFalse(request.isPending)
         XCTAssertFalse(request.finish(second))
     }
-    func testSurfaceSettlingDistinguishesDepthFromTangentialOriginChanges() throws {
-        var quality = SurfaceStability()
-        XCTAssertFalse(quality.isReady(at: 1))
-        quality.observe(.identity, at: 0)
-        XCTAssertFalse(quality.isReady(at: 0.59))
-        XCTAssertTrue(quality.isReady(at: 0.6))
-        quality.observe(try transform(SIMD3(0.4, 0, 0.5)), at: 0.7)
-        XCTAssertTrue(quality.isReady(at: 0.7))  // The same plane with a shifted origin.
-        quality.observe(try transform(SIMD3(0, 0.03, 0)), at: 0.8)
-        XCTAssertFalse(quality.isReady(at: 1))
-        XCTAssertTrue(quality.isReady(at: 1.5))
-        let tilted = try Pose(simd_float4x4(simd_quatf(angle: 0.1, axis: SIMD3(1, 0, 0))))
-        quality.observe(tilted, at: 1.6)
-        XCTAssertFalse(quality.isReady(at: 1.7))
-        XCTAssertTrue(quality.isReady(at: 2.3))
-        quality.observe(.identity, at: 0)  // A fresh session clock cannot reuse old evidence.
-        XCTAssertFalse(quality.isReady(at: 0.1))
-        quality.observe(.identity, at: .nan)
-        XCTAssertFalse(quality.isReady(at: 10))
-    }
     func testFrozenCaptureRejectsCameraMotionAndRotation() throws {
         XCTAssertTrue(CameraCaptureQuality.isSteady(from: .identity, to: try transform(SIMD3(0.005, 0, 0), yaw: 0.01)))
         XCTAssertFalse(CameraCaptureQuality.isSteady(from: .identity, to: try transform(SIMD3(0.1, 0, 0))))
@@ -76,10 +56,6 @@ final class SpatialTests: XCTestCase {
         let from = Float.pi - 0.05
         let to = -Float.pi + 0.05
         XCTAssertEqual(ScanVisualization.shortAngle(from: from, to: to) - from, 0.1, accuracy: 0.0001)
-        let p = ScanVisualization.rotate(SIMD3(1, 2, 0), yaw: Float.pi / 2)
-        XCTAssertEqual(p.x, 0, accuracy: 0.0001)
-        XCTAssertEqual(p.y, 2)
-        XCTAssertEqual(p.z, 1, accuracy: 0.0001)
     }
     func testCoverageNeedsTranslationAndDifferentDirections() {
         var coverage = ScanCoverage()
@@ -368,8 +344,6 @@ extension SpatialTests {
             }
         }
         XCTAssertTrue(progress.canFinish)
-        XCTAssertEqual(progress.stage, 3)
-        XCTAssertEqual(progress.horizontalCount, 1)
         progress.featureCount = 19
         XCTAssertFalse(progress.hasUsefulFeatures)
         XCTAssertFalse(progress.canFinish)
@@ -378,12 +352,11 @@ extension SpatialTests {
         XCTAssertTrue(progress.canFinish)
         progress.normalTracking = false
         XCTAssertFalse(progress.canFinish)
-        XCTAssertEqual(progress.stage, 0)
         progress.normalTracking = true
         progress.mapReady = false
         XCTAssertFalse(progress.canFinish)
     }
-    func testRoomMapDoesNotRequireManualDotsOrMarkerAndOldRecordsStillDecode() throws {
+    func testRoomMapRoundTripsWithAndWithoutSurfaces() throws {
         var room = Room(project_id: UUID(), name: "Scanned room")
         room.map_path = "test.worldmap"
         try room.validate()

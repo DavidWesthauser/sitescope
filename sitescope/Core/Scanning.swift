@@ -35,20 +35,11 @@ public struct ScanProgress: Equatable, Sendable {
     public var observedSurfaceCount = 0
     public var renderingReduced = false
     public init() {}
-    public var verticalCount: Int { surfaces.filter(\.vertical).count }
-    public var horizontalCount: Int { surfaces.count - verticalCount }
     public var hasUsefulFeatures: Bool { featureCount >= Self.minimumFeatureCount }
     /// Readiness gates: all must hold, so a room is never finished on a single signal.
     /// The 2 s stability window keeps a briefly good frame from ending the scan.
     public var canFinish: Bool {
         normalTracking && mapReady && hasUsefulFeatures && stableSeconds >= 2 && !surfaces.isEmpty && coverage.ready
-    }
-    /// Coarse progress step for the UI (0 to 3); each step needs the previous one's evidence.
-    public var stage: Int {
-        guard normalTracking else { return 0 }
-        if canFinish { return 3 }
-        if !surfaces.isEmpty { return 2 }
-        return normalTracking ? 1 : 0
     }
 }
 

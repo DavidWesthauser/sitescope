@@ -17,7 +17,7 @@ public enum ScanRenderingBudget {
     }
 
     /// Deterministic, ordered samples of a closed boundary; no repeated closing vertex.
-    public static func displayBoundary(_ points: [Point3], maximum: Int = 24) -> [Point3] {
+    public static func displayBoundary(_ points: [Point3], maximum: Int = maximumBoundaryVertices) -> [Point3] {
         let limit = min(maximum, maximumCachedBoundaryVertices)
         guard limit >= 3 else { return [] }
 
@@ -48,7 +48,7 @@ public enum ScanRenderingBudget {
     }
 
     /// Nearest sampled boundary centroids, with UUID tie-breaking independent of input order.
-    public static func visiblePatches(_ patches: [SurfacePatch], camera: SIMD3<Float>, maximum: Int = 24)
+    public static func visiblePatches(_ patches: [SurfacePatch], camera: SIMD3<Float>, maximum: Int = maximumPatches)
         -> [SurfacePatch]
     {
         let limit = min(maximum, maximumPatches)

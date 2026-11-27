@@ -39,11 +39,6 @@ public enum ScanVisualization {
         return faces
     }
 
-    /// Rotates a point around the vertical (Y) axis by `yaw` radians.
-    public static func rotate(_ p: SIMD3<Float>, yaw: Float) -> SIMD3<Float> {
-        SIMD3(cos(yaw) * p.x - sin(yaw) * p.z, p.y, sin(yaw) * p.x + cos(yaw) * p.z)
-    }
-
     /// Signed angle step from `from` to `to` along the shorter arc, so animation never spins the long way round.
     public static func shortAngle(from: Float, to: Float) -> Float { from + atan2(sin(to - from), cos(to - from)) }
 }

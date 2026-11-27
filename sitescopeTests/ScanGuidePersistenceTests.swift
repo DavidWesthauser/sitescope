@@ -107,7 +107,9 @@ final class ScanGuidePersistenceTests: XCTestCase {
             at: mapURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let bytes = Data("Synthetic map fixture for transfer testing only".utf8)
         try bytes.write(to: mapURL)
-        let task = Annotation(room: room, kind: .text, pose: .identity, title: "Saved pose", detail: "")
+        let task = Annotation(
+            room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(0.5, 0, 0))],
+            title: "Saved pose", detail: "")
         let archive = root.appendingPathComponent("guide.sitescope")
         try ProjectTransferArchive.write(
             project: project, rooms: [room], annotations: [task], assetRoot: root, to: archive)

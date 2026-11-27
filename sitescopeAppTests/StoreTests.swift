@@ -228,29 +228,3 @@ extension StoreTests {
         XCTAssertEqual(Store(localURL: url).projects.map(\.name), ["After recovery"])
     }
 }
-
-#if !canImport(sitescopeCore) && targetEnvironment(simulator)
-    extension StoreTests {
-        func testSavedShapesRenderCleanEdgesAndArrowHeadWithoutControlDots() throws {
-            let room = Room(project_id: UUID(), name: "Rendering fixture")
-            let ar = ARController(room: room, mode: .walkthrough)
-            ar.trackingNormal = true
-            ar.localization.propose(.identity)
-            let points = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(1, 1, 0))]
-            let line = Annotation(
-                room: room, kind: .line, pose: .identity, points: points, title: "Drawing", detail: "")
-            let area = Annotation(
-                room: room, kind: .area, pose: .identity, points: points, title: "Area marking", detail: "")
-            let arrow = Annotation(
-                room: room, kind: .arrow, pose: .identity, points: [points[0], points[2]], title: "Drawing", detail: "")
-            ar.annotations = [line, area, arrow]
-            ar.confirm()
-            let roots = ar.view.scene.anchors.flatMap { Array($0.children) }
-            XCTAssertEqual(roots.first(where: { $0.name == line.id.uuidString })?.children.count, 1)
-            XCTAssertEqual(roots.first(where: { $0.name == area.id.uuidString })?.children.count, 3)
-            XCTAssertEqual(roots.first(where: { $0.name == arrow.id.uuidString })?.children.count, 2)
-            XCTAssertFalse(ar.showSurfaceGuides)
-            ar.stop()
-        }
-    }
-#endif

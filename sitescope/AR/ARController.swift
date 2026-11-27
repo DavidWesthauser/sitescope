@@ -29,7 +29,6 @@ struct FrozenDrawingFrame {
     var imageData: Data?
     var draftImageTexture: TextureResource?
     var imageTextures: [String: TextureResource] = [:]
-    var cachedImageTextureCount: Int { imageTextures.count }
     var imageLoadGeneration = UUID()
     var draftImageRequest = ViewCaptureRequest()
     @Published var loadingSavedImages = false
@@ -68,7 +67,6 @@ struct FrozenDrawingFrame {
     /// Written once in init and read only in deinit, so the nonisolated deinit cannot race with it.
     nonisolated(unsafe) private var memoryObserver: NSObjectProtocol?
     @Published private(set) var renderingReduced = false
-    var cachedSurfaceCount: Int { detectedSurfaces.count }
     private var lastProgressUpdate: TimeInterval = 0
     private var lastMiniatureUpdate: TimeInterval = 0
     private var coverage = ScanCoverage()
@@ -254,16 +252,6 @@ struct FrozenDrawingFrame {
         normalSince = nil
         startedAt = Date()
         guidance = "Search continues. Move to a scanned area and look at familiar details."
-    }
-    /// Called after the user confirms the room is the one they expect. Drawings render only once localization is `.aligned`.
-    func confirm() {
-        localization.confirm(normalTracking: trackingNormal)
-        if localization.state == .aligned {
-            render()
-            renderDraft()
-            refreshSurfaceVisuals()
-            guidance = "Room recognized. Saved drawings are visible."
-        }
     }
     func stop() {
         mapSave.reset()
