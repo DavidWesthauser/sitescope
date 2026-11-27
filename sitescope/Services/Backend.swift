@@ -80,8 +80,10 @@ struct Configuration {
             try save(result)
             return true
         }
-        if register { return false }
-        throw AppError.message("The server returned an invalid authentication session.")
+        // With email confirmation on, sign-up answers with the new user and no session. Anything else is an error,
+        // not a reason to tell the user to check their email.
+        if register, (try? JSONDecoder().decode(User.self, from: data)) != nil { return false }
+        throw AppError.message("The server returned an invalid authentication reply.")
     }
     private func save(_ value: AuthSession) throws {
         if persistSession { try Vault.write(JSONEncoder().encode(value)) }

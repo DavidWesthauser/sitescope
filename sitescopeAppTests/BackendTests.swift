@@ -73,9 +73,18 @@ final class StubProtocol: URLProtocol {
         XCTAssertEqual(store.projects, [old])
     }
     func testUnconfirmedRegistrationDoesNotCreateLogin() async throws {
-        let backend = backend { _ in (200, Data("{\"user\":{}}".utf8)) }
+        let user = try JSONEncoder().encode(User(id: UUID(), email: "new@example.test"))
+        let backend = backend { _ in (200, user) }
         let active = try await backend.authenticate(email: "new@example.test", password: "password", register: true)
         XCTAssertFalse(active)
+        XCTAssertNil(backend.user)
+    }
+    func testUnreadableSignUpReplyIsAnError() async throws {
+        let backend = backend { _ in (200, Data("{\"user\":{}}".utf8)) }
+        do {
+            _ = try await backend.authenticate(email: "new@example.test", password: "password", register: true)
+            XCTFail("An unreadable reply must not look like a pending confirmation")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("invalid")) }
         XCTAssertNil(backend.user)
     }
     func testPermissionErrorAndEmptyMutationAreReported() async throws {
