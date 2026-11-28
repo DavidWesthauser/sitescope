@@ -1,37 +1,30 @@
-# T-029 Database: scans and drawings
+# T-029 Database: minimal changes for the app
 
 - Status: todo · Priority: P0 · Who: together · Owner: — · Depends on: T-003
 - Requirements: M1, M2, M3, M4, G3
 
 ## Description
 
-The hosted database runs the design in DATABASE_API.md (projects → houses → rooms, access grants, comments), created in the SQL editor on 2026-11-26. The app is built against the target below (T-003, T-008); until the database has it, sign-in, rights and grants work, but syncing rooms, drawings and scans fails and the app keeps them on the phone.
+The hosted database runs the design in DATABASE_API.md (created in the SQL editor on 2026-11-26). The app (T-003, T-008) needs the changes below and nothing else; until they exist, rooms, drawings and scans stay on the phone ("couldn't upload"). The columns are the ones in `SyncEntity.insertFields` and `writableFields` (`sitescope/Core/Sync.swift`); the calls are in `sitescope/Services/RemoteStore.swift` and `Backend.swift`.
 
-Decided 2026-11-28: a room has a name, a description, a scan and drawings. A drawing is only geometry: a freehand line, a marked area or a pinned photo.
+Nothing runs on the hosted project before a human reviewed the SQL. No existing function, policy or grant is replaced.
 
-Only what the app needs is in this ticket. Everything else (immutability triggers, size limits, hardening, clean-up of unused columns, file clean-up) is left out on purpose and gets its own ticket if it turns out to matter.
+## Changes
 
-Nothing here runs on the hosted project before a human reviewed the SQL. All changes come on top of the design; no existing function, policy or grant is replaced.
+1. **`revision`** (`bigint not null default 1`) on `projects`, `houses` and `rooms`, plus a `before update` trigger that raises it by 1 on every update. Clients never set it. The app writes and deletes with `…&revision=eq.<n>`.
+2. **`rooms`** gets `description`, `coordinate_id`, `map_path`, `scan_guide_jpeg`, `surfaces` and `spatial_version`. Insert may set `coordinate_id`, `description` and the scan columns; update grants for `name`, `description`, `map_path`, `scan_guide_jpeg`, `surfaces` and `spatial_version` (not `coordinate_id`).
+3. **New table `drawings`**: `id` (from the client), `room_id` (references `rooms`, cascade delete), `coordinate_id`, `kind` (`line`, `area` or `image`), `pose`, `points`, `strokes`, `image` and `revision` (with the same trigger). Read with level ≥ 1 on the room, insert, update and delete with level ≥ 2 (`scope_level` through the room's ids). Update grants for `pose`, `points`, `strokes` and `image`.
+4. **Storage**: private bucket `room-assets`, paths `<project_id>/<room_id>/<file>`. Read from level ≥ 1, upload from level ≥ 2, by the room's level.
 
-## Target, compared with the hosted design
+## Order
 
-**Revisions.** `projects`, `houses`, `rooms` and `drawings` get `revision bigint not null default 1` and `updated_at timestamptz not null default now()`, both set by a `before update` trigger (revision + 1, server clock). Clients never set them. The app writes with `PATCH …&revision=eq.<n>` and `DELETE …&revision=eq.<n>` (T-008 conflict detection).
-
-**`rooms`.** Add `description text not null default ''`, `coordinate_id uuid not null default gen_random_uuid()`, `map_path text`, `scan_guide_jpeg text`, `surfaces jsonb`, `spatial_version int not null default 1`. Members (level ≥ 2) may update `description`, `map_path`, `scan_guide_jpeg`, `surfaces` and `spatial_version`; `coordinate_id` is set on insert only.
-
-**New table `drawings`.** `id uuid primary key` (from the client), `room_id uuid not null references rooms on delete cascade`, `coordinate_id uuid not null`, `kind text not null check (kind in ('line', 'area', 'image'))`, `pose jsonb not null`, `points jsonb not null default '[]'`, `strokes jsonb`, `image jsonb`, `created_at`, `revision`, `updated_at`. RLS: read with level ≥ 1 on the room, insert/update/delete with ≥ 2 (`scope_level` through the room's ids).
-
-**Storage.** Private bucket `room-assets`, files at `<project_id>/<room_id>/<file>` (`.worldmap` scans, `.png` images). By the room's level: read ≥ 1, upload ≥ 2, delete ≥ 3.
-
-## Tasks
-
-- [ ] Design as first migration in `supabase/migrations/`, marked applied on the hosted project.
-- [ ] Second migration with every change above.
-- [ ] pgTAP tests: the new permission rows (drawings, storage paths) and the revision bump.
-- [ ] Update DATABASE_API.md once the migration is applied.
+- [ ] Put the current design into Git as the first migration in `supabase/migrations/`, marked as applied on the hosted project.
+- [ ] Put changes 1–4 into a second migration.
+- [ ] A human reviews the SQL.
+- [ ] Only then run it on the hosted project.
 
 ## Acceptance criteria
 
-- [ ] `supabase db reset` rebuilds design + changes locally; the pgTAP suite passes.
+- [ ] `supabase db reset` rebuilds design plus changes locally.
 - [ ] A human reviewed the SQL; afterwards the hosted schema equals `supabase/migrations/`.
 - [ ] The app syncs a room with its scan and drawings to the hosted project and back to a second phone (H-003).
