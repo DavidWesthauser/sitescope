@@ -80,12 +80,12 @@ struct RoomView: View {
             }
         }
         .navigationTitle(room.name)
-        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.refresh() }
         .toolbar {
             if level.canContribute {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis.circle") {
+                        RetryMenuButton(key: RecordKey(.room, room.id))
                         Button("Rename", systemImage: "pencil") { renaming = true }
                         if level.canManage {
                             Button("People", systemImage: "person.2") { showingPeople = true }

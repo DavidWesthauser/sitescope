@@ -1,36 +1,44 @@
 # Architecture
 
-Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies. Backend: Supabase (Postgres + RLS, Auth) via plain `URLSession`; the app is only usable while signed in. The database design is DATABASE_API.md; storing scans and AR instructions there comes with T-029, offline work with T-008.
+Native iOS 17+ app: SwiftUI, ARKit, RealityKit, no third-party iOS dependencies. Backend: Supabase (Postgres + RLS, Auth, Storage) via plain `URLSession`. Sign-in is required; signed in, the app works offline and syncs in the background (T-008). The database target it is built against is T-029; the hosted design is DATABASE_API.md.
 
-## Layout
+## Layers
+
+Model → service → view model → view, as in the rest of the code:
+
+- **Model** (`sitescope/Core/`): pure value types and rules, no I/O, unit-tested. `Models` (project, house, room, drawing + validation), `Access` (levels and the permission table), `Sync` (field merge, conflict policy, queue rules), spatial and scanning math.
+- **Services** (`sitescope/Services/`): storage and network. `LocalDataStore` (the account's file), `LocalRepository` (writes to the phone and queues), `SyncEngine` (upload queue, conflicts, download), `RemoteStore` (Supabase rows, files, rights), `Backend` (HTTP, Auth, Keychain session), `Connectivity` (network path).
+- **View model** (`sitescope/App/Store.swift`): the state all screens show, input validation, the actions they trigger. No file or network code.
+- **Views** (`sitescope/Views/`): SwiftUI only. They read the `Store` and call its actions.
 
 | Path | Responsibility |
 |---|---|
-| `sitescope/App/SitescopeApp.swift` | Entry point: sign-in screen until signed in, then the project list |
-| `sitescope/App/Store.swift` | The app's view model: state all screens show, input validation, actions that call the services. No file or network code |
-| `sitescope/Services/DataRepository.swift` | `DataRepository` (projects, houses, rooms, AR data) used by `Store` and `ARController`; `AccessManagement` (levels, grants, responsible, profiles, organizations) |
-| `sitescope/Services/CloudRepository.swift` | Both protocols on Supabase: table and RPC names. AR calls report T-029 until the database stores them |
-| `sitescope/Services/CloudRecords.swift` | Request bodies: only the columns clients may set, optionals as `null` |
-| `sitescope/Services/Backend.swift` | Supabase REST/Auth/Storage client, token refresh, Keychain session (`Vault`). Only the publishable key; RLS applies to every call |
-| `sitescope/Core/` | Pure, testable value types: `Models` (+ validation), `Spatial` (poses, alignment), `Scanning` (coverage gates), `TrackingQuality`, `DrawingGeometry`, `FreehandDraft`, `MapSaveTransaction`, `Access` (levels and the permission table), `RoomSurfaceModel`, `ScanRenderingBudget`, `ScanVisualization` |
-| `sitescope/AR/` | `ARController` (session lifecycle, tracking) with extensions `+Drawing`, `+Persistence` (map save, image load), `+Rendering` (instructions), `+Surfaces` (plane outlines); image/scan-guide helpers |
-| `sitescope/Views/` | `ManagementViews` (sign-in, project list), `ProjectDetailView`, `HouseDetailView`, `RoomDetailView`, `AccessViews` (grants, responsible), `AdministrationView`, `SettingsView`, `TaskEditor`, `ARScreen`, drawing/scan overlays, tips |
-| `sitescope/Resources/` | `Info.plist`, `Config.xcconfig` (+ git-ignored `Secrets.xcconfig`) |
-| `supabase/` | CLI config only; the design is not a migration yet (T-029) |
-| `sitescopeTests/` | Portable core tests (`swift test`) |
-| `sitescopeAppTests/` | Store/backend fixtures, `InMemoryRepository` for tests without a server, AR layout/render tests (simulator) |
-| `sitescopeUITests/` | UI workflows |
-| `scripts/generate_project.py` | Regenerates the Xcode project deterministically |
+| `App/SitescopeApp.swift` | Sign-in until signed in, then the project list; syncs when the app becomes active |
+| `Views/ProjectListView`, `ProjectView`, `HouseView`, `RoomView` | Project → house → room, navigated by `Route` values |
+| `Views/AccessViews` | People per scope, adding a person, the responsible person |
+| `Views/SyncViews` | Row badge, bottom-bar status, notices |
+| `Views/CommonViews` | Name prompt, delete confirmation, list row |
+| `Views/SignInView`, `SettingsView`, `AdministrationView` | Account, sync, appearance; admin tools |
+| `Views/ARScreen` + `sitescope/AR/` | Scanning and drawing (`ARController` with `+Drawing`, `+Persistence`, `+Rendering`, `+Surfaces`) |
+| `sitescopeTests/` | Core tests (`swift test`) |
+| `sitescopeAppTests/` | Service, sync (fake server with revisions) and AR layout tests |
+| `supabase/` | CLI config; the design becomes a migration in T-029 |
+
+## Screen pattern (HIG)
+
+Every list screen works the same: rows with icon, title and subtitle and a sync badge; "+" adds; the "…" menu holds Rename, People and Delete for the item on screen; rows offer the same through swipe and context menus; one name prompt for creating and renaming; deleting always asks with the item's name; empty lists show a `ContentUnavailableView` with the action; the bottom toolbar shows the sync status. Controls appear only if the caller's level allows them.
 
 ## Data model
 
-`Project` → `House` → `Room` as in DATABASE_API.md (names, `responsible_id`; rooms also dimensions, `area`, `status`). `Room` also carries the AR fields (`coordinate_id`, `map_path`, `surfaces`, `scan_guide_jpeg`); they have no columns yet, decode as defaults and are never sent (T-029). `Annotation (room_id, coordinate_id, kind, pose, points/strokes/image, title, detail, status, priority)` exists only in the app until T-029.
-Rights: each screen asks `scope_level` for the caller's level (0 none … 4 admin) and `AccessLevel` maps it to the permission table in DATABASE_API.md to show or hide controls. The database enforces the same rules.
+`Project` → `House` → `Room` → drawings (`Annotation`). A room has a name, a description, a responsible person and a scan (`coordinate_id`, `map_path`, `scan_guide_jpeg`, `surfaces`). A drawing is geometry only: `line` (strokes), `area` or `image`, with `pose` and points in the room's coordinate system. No tasks, titles, status or priority (decided 2026-11-28).
 
-## Persistence
+## Persistence and sync (T-008)
 
-- Everything lives on the server: tables via PostgREST, the session in the Keychain. No offline cache or queue yet (T-008), no file storage yet (T-029).
-- On-device mode and `.sitescope` file export/import were removed on 2026-11-27 (T-003). Old `local.json` files stay on phones but are no longer read.
+- Each account has `Application Support/sitescope/accounts/<user>/data.json` plus `assets/` (scans, photos). Writes are atomic and serialized; an unreadable file is moved aside, never deleted. The pre-account `sitescope/local.json` is left untouched.
+- A change is written to the phone, then queued (`OutboxItem`, one per record). The queue uploads on reconnect, foreground, refresh and after each change: parents first, deletes children first, files right before the record that needs them.
+- Writes name the server revision they are based on (T-029). On a mismatch the engine reads the row and merges per field against the last synced version: only one side changed → that side; both changed → `ConflictPolicy` (default `LastChangeWins`, the phone's upload). Deleted on the server but edited here → recreated. Deleted here but edited there → restored. A different scan on the server → the phone's scan and its drawings move to a new room. Every such case leaves a `SyncNotice`.
+- A change the server refuses is marked failed with its reason and retried only when the user asks. Being offline just waits.
+- Rights (`scope_level`) are cached per scope; something created on the phone and not yet uploaded belongs to its creator. Sharing and handing over need the network.
 
 ## Spatial contract
 

@@ -39,7 +39,7 @@ struct SettingsView: View {
             Section {
                 LabeledContent("Status") { SyncStatusView() }
                 LabeledContent("Waiting Changes", value: "\(store.waitingChanges)")
-                Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") { Task { await store.refresh() } }
+                Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") { Task { await store.syncNow() } }
                     .disabled(!store.isOnline || store.isSyncing)
                 if store.failedChanges > 0 {
                     Button("Retry Failed Changes", systemImage: "arrow.clockwise") { Task { await store.retry() } }
@@ -68,9 +68,11 @@ struct SettingsView: View {
                 }
             }
             SyncNoticesSection()
-            Section {
-                Picker("Appearance", selection: $appearance) {
+            Section("General") {
+                Picker(selection: $appearance) {
                     ForEach(AppearancePreference.allCases) { Text($0.label).tag($0) }
+                } label: {
+                    Label("Appearance", systemImage: "circle.lefthalf.filled")
                 }.accessibilityIdentifier("settings.appearance")
                 NavigationLink {
                     TrackingTipsView()

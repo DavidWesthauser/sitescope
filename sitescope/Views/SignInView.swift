@@ -49,7 +49,7 @@ struct SignInView: View {
                     Text(
                         mode == .register
                             ? "Use at least \(Self.minimumPasswordLength) characters. You’ll get an email to confirm the account."
-                            : "Projects others share with you appear after you sign in.")
+                            : "Sign in to see your projects and the ones shared with you.")
                 }
                 Section {
                     Button(mode.rawValue, action: submit)

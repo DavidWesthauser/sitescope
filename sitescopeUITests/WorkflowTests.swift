@@ -45,18 +45,21 @@ final class WorkflowTests: XCTestCase {
         let title = "UITest-" + String(UUID().uuidString.prefix(8))
         create(in: app, button: "projects.new", name: title, confirm: "Create")
         app.staticTexts[title].tap()
-        create(in: app, button: "houses.new", name: "Test house", confirm: "Add")
+        create(in: app, button: "houses.new", name: "Test house", confirm: "Create")
         app.staticTexts["Test house"].tap()
-        create(in: app, button: "rooms.new", name: "Test room", confirm: "Add")
+        create(in: app, button: "rooms.new", name: "Test room", confirm: "Create")
         app.staticTexts["Test room"].tap()
-        replaceFieldText(app.textFields["room.name"], with: "Renamed room")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        app.swipeDown()  // Pull to refresh: the list must show the name saved on the server.
-        XCTAssertTrue(app.staticTexts["Renamed room"].waitForExistence(timeout: 20))
-        app.staticTexts["Renamed room"].tap()
-        delete(in: app, button: "room.delete", confirm: "room.delete.confirm")
+        menu(in: app, "room.more", choose: "Rename")
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + "Renamed room")
+        app.alerts.buttons["Rename"].tap()
+        XCTAssertTrue(app.navigationBars["Renamed room"].waitForExistence(timeout: 5), "Saved on the phone at once")
+        menu(in: app, "room.more", choose: "Delete Room")
+        confirmDelete(in: app)
         app.navigationBars.buttons.element(boundBy: 0).tap()  // House → project.
-        delete(in: app, button: "project.delete", confirm: "project.delete.confirm")
+        menu(in: app, "project.more", choose: "Delete Project")
+        confirmDelete(in: app)
         XCTAssertTrue(app.buttons["projects.new"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts[title].exists)
     }
@@ -73,22 +76,20 @@ final class WorkflowTests: XCTestCase {
         action.tap()
         XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 20))
     }
-    /// Deletes through the confirmation dialog.
-    private func delete(in app: XCUIApplication, button: String, confirm: String) {
-        let delete = app.buttons[button]
-        XCTAssertTrue(delete.waitForExistence(timeout: 10))
-        for _ in 0..<5 where !delete.isHittable { app.swipeUp() }
-        delete.tap()
-        let confirmation = app.buttons[confirm].firstMatch
-        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
-        confirmation.tap()
+    /// Opens the "…" menu of the screen and picks an item.
+    private func menu(in app: XCUIApplication, _ identifier: String, choose item: String) {
+        let more = app.buttons[identifier]
+        XCTAssertTrue(more.waitForExistence(timeout: 10))
+        more.tap()
+        let entry = app.buttons[item]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
     }
-    /// Replaces an inline name field's text and commits it with Return. Taps near the trailing edge so the caret
-    /// sits after the text and the deletes remove all of it.
-    private func replaceFieldText(_ field: XCUIElement, with value: String) {
-        XCTAssertTrue(field.waitForExistence(timeout: 10))
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        let current = field.value as? String ?? ""
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + value + "\n")
+    /// Deleting always asks first; the alert names the item and offers Cancel.
+    private func confirmDelete(in app: XCUIApplication) {
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.buttons["Cancel"].exists)
+        alert.buttons["Delete"].tap()
     }
 }

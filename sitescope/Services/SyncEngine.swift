@@ -62,13 +62,13 @@ import Foundation
 
     /// The server's own words for refusals, but not its internals: a column or table it does not have yet means
     /// the database is not on the version the app expects.
-    static func readable(_ error: Error) -> String {
+    static func readable(_ error: Error, deleting: Bool = false) -> String {
         let text = error.localizedDescription
         let schema = ["schema cache", "does not exist", "column", "relation"]
-        if schema.contains(where: { text.localizedCaseInsensitiveContains($0) }) {
-            return "The server can’t store this yet. It stays on this iPhone and uploads once the server is updated."
-        }
-        return text
+        guard schema.contains(where: { text.localizedCaseInsensitiveContains($0) }) else { return text }
+        return deleting
+            ? "The server can’t delete this yet. It is gone from this iPhone; the server deletes it once it is updated."
+            : "The server can’t store this yet. It stays on this iPhone and uploads once the server is updated."
     }
 
     static func isOffline(_ error: Error) -> Bool {
@@ -106,7 +106,7 @@ import Foundation
             } catch {
                 // Offline or signed out: stop and keep everything queued. Anything else: mark this change failed.
                 if Self.isOffline(error) || (error as? HTTPFailure)?.status == 401 { throw error }
-                let reason = Self.readable(error)
+                let reason = Self.readable(error, deleting: item.action == .delete)
                 try await storage.change { data in
                     guard let i = data.outbox.firstIndex(where: { $0.key == item.key }) else { return }
                     data.outbox[i].failures += 1

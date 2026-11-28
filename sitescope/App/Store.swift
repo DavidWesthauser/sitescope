@@ -175,6 +175,11 @@ import SwiftUI
             await refreshAccount()
         }
     }
+    /// "Sync Now" in Settings: something the user asks for, so failed changes are tried again too.
+    func syncNow() async {
+        await engine?.retry()
+        await refreshAccount()
+    }
     /// Pull to refresh: waits for the sync, so the spinner shows how long it takes.
     func refresh() async {
         await engine?.sync()

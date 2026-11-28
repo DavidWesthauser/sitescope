@@ -42,7 +42,7 @@ struct ProjectView: View {
                             level.canManage
                                 ? "Add the buildings of this project." : "No houses are shared with you yet.")
                     } actions: {
-                        if level.canManage { Button("Add House") { adding = true }.buttonStyle(.borderedProminent) }
+                        if level.canManage { Button("New House") { adding = true }.buttonStyle(.borderedProminent) }
                     }
                 }
                 ForEach(houses) { house in
@@ -74,10 +74,11 @@ struct ProjectView: View {
         .toolbar {
             if level.canManage {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Add House", systemImage: "plus") { adding = true }.accessibilityIdentifier("houses.new")
+                    Button("New House", systemImage: "plus") { adding = true }.accessibilityIdentifier("houses.new")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis.circle") {
+                        RetryMenuButton(key: RecordKey(.project, project.id))
                         Button("Rename", systemImage: "pencil") { renaming = true }
                         Button("People", systemImage: "person.2") { showingPeople = true }
                             .disabled(!store.isOnline)
@@ -89,7 +90,7 @@ struct ProjectView: View {
             ToolbarItem(placement: .status) { SyncStatusView() }
         }
         .navigationDestination(isPresented: $showingPeople) { AccessView(scope: .project(project)) }
-        .namePrompt("Add House", action: "Add", isPresented: $adding) { name in
+        .namePrompt("New House", action: "Create", isPresented: $adding) { name in
             store.run { try await store.createHouse(in: project, name: name) }
         }
         .namePrompt("Rename Project", action: "Rename", isPresented: $renaming, initial: project.name) { name in

@@ -1,10 +1,10 @@
 # sitescope
 
-Room notes that stay where the work is. You scan a room once with the iPhone camera, then draw instructions, mark areas and pin images onto walls and surfaces. Later a colleague opens the same room: when the phone recognizes it, every note appears in place. Tasks also work without AR.
+Drawings that stay where the work is. You scan a room once with the iPhone camera, then draw lines, mark areas and pin photos onto walls and surfaces, and describe the work in the room's description. Later a colleague opens the same room: when the phone recognizes it, every drawing appears in place.
 
 Native iOS 17+ (SwiftUI, ARKit, RealityKit), LiDAR not required, no third-party iOS dependencies. Backend: Supabase. DHBW TIF24A course project by Leonard Aichele and David Westhauser. Repository: <https://github.com/DavidWesthauser/sitescope>.
 
-> **Current state:** accounts, projects → houses → rooms and access rights work against Supabase; saving AR scans in the cloud comes with T-029. See [docs/STATUS.md](docs/STATUS.md).
+> **Current state:** sign-in required, then the app works offline and syncs in the background. Accounts, projects and houses sync with Supabase; rooms, scans and drawings stay on the phone until the database has T-029. See [docs/STATUS.md](docs/STATUS.md).
 
 ## Documentation
 
@@ -28,10 +28,11 @@ Native iOS 17+ (SwiftUI, ARKit, RealityKit), LiDAR not required, no third-party 
 ## Quick usage
 
 1. Register or sign in. The app is only usable with an account.
-2. Create a project (you become responsible for it), add houses, then rooms with their size and building status.
-3. Under **Manage access**, give people a role on a project, house or room: *member* (adds and edits rooms) or *external* (views). Access on a project or house covers everything below it.
-4. Administrators manage people and organizations under **Settings → Administration**.
-5. Room scans and AR instructions come back once the database can store them (T-029).
+2. Create a project with **+** (you become responsible for it), add houses, then rooms.
+3. In a room, tap **Scan Room**, walk slowly and look in all four directions from three spots. Then **Draw in AR**: lines, areas or photos. Write what to do in the room's **Description**.
+4. Under **… → People**, give people a role on a project, house or room: *member* (adds rooms, scans, draws) or *external* (views). Access on a project or house covers everything inside it.
+5. Everything works offline. The bottom bar shows when changes wait or couldn't upload; swipe a row to the right to retry.
+6. Administrators manage people and organizations under **Settings → Administration**.
 
 ## Tests
 

@@ -65,7 +65,7 @@ struct RecordRow: View {
                     Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                 }
             } icon: {
-                Image(systemName: systemImage).foregroundStyle(.tint)
+                Image(systemName: systemImage).foregroundStyle(.tint).accessibilityHidden(true)
             }
             Spacer(minLength: 8)
             SyncBadge(state: state)

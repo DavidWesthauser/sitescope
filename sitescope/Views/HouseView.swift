@@ -44,7 +44,7 @@ struct HouseView: View {
                         Text(level.canContribute ? "Add a room, then scan it." : "No rooms are shared with you yet.")
                     } actions: {
                         if level.canContribute {
-                            Button("Add Room") { adding = true }.buttonStyle(.borderedProminent)
+                            Button("New Room") { adding = true }.buttonStyle(.borderedProminent)
                         }
                     }
                 }
@@ -81,12 +81,13 @@ struct HouseView: View {
         .toolbar {
             if level.canContribute {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Add Room", systemImage: "plus") { adding = true }.accessibilityIdentifier("rooms.new")
+                    Button("New Room", systemImage: "plus") { adding = true }.accessibilityIdentifier("rooms.new")
                 }
             }
             if level.canManage {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis.circle") {
+                        RetryMenuButton(key: RecordKey(.house, house.id))
                         Button("Rename", systemImage: "pencil") { renaming = true }
                         Button("People", systemImage: "person.2") { showingPeople = true }
                             .disabled(!store.isOnline)
@@ -98,7 +99,7 @@ struct HouseView: View {
             ToolbarItem(placement: .status) { SyncStatusView() }
         }
         .navigationDestination(isPresented: $showingPeople) { AccessView(scope: .house(project, house)) }
-        .namePrompt("Add Room", action: "Add", isPresented: $adding) { name in
+        .namePrompt("New Room", action: "Create", isPresented: $adding) { name in
             store.run { try await store.createRoom(in: house, name: name) }
         }
         .namePrompt("Rename House", action: "Rename", isPresented: $renaming, initial: house.name) { name in
