@@ -46,6 +46,7 @@ struct RoomView: View {
                         Label("Not scanned yet", systemImage: "viewfinder").foregroundStyle(.secondary)
                     }
                 } else {
+                    LabeledContent("Drawings", value: "\(drawings)")
                     Button("View in AR", systemImage: "arkit") { arMode = .walkthrough }
                         .accessibilityIdentifier("room.view")
                     if level.canContribute {
@@ -61,11 +62,10 @@ struct RoomView: View {
             } header: {
                 Text("Scan")
             } footer: {
-                if room.map_path == nil {
-                    Text("Scan the room once; drawings are placed on its walls and surfaces.")
-                } else {
-                    Text(drawings == 1 ? "1 drawing" : "\(drawings) drawings")
-                }
+                Text(
+                    room.map_path == nil
+                        ? "Scan the room once; drawings are placed on its walls and surfaces."
+                        : "Drawings appear in place once the iPhone recognizes the room.")
             }
             Section("Description") {
                 if level.canContribute {

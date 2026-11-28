@@ -42,7 +42,7 @@ Rules every change follows. `swift format` checks the layout automatically; the 
   |---|---|---|---|
   | `AccentColor` | `#00727F` 5.7:1 (5.1:1 on `#F2F2F7`) | `#4FD1DC` 9.3:1 | `#00585F` 8.2:1 / `#8BE4EA` 11.7:1 |
   | `Warning` | `#A84B00` 5.7:1 | `#FFA94D` 8.9:1 | `#8A3D00` 7.6:1 / `#FFC285` 10.8:1 |
-- HIG layout: a destructive action sits alone in the last section of its screen, with a footer, and asks through a `confirmationDialog` attached to its button (title names the item, Cancel has `role: .cancel`). Explanations go in section footers, not in rows. Names are edited inline (`NameSection`), and titles show the real name.
+- HIG layout (one pattern on every list level, see `Views/CommonViews.swift`): "+" in the toolbar creates; the "…" menu holds Rename, Share and Delete for the item on screen, with Delete after a divider; rows offer the same through swipe and context menus; creating and renaming use one name alert (`namePrompt`, specific placeholder); deleting always asks with an alert that names the item and offers Cancel (`deleteConfirmation`). Explanations go in section footers, data in rows. Errors inside a sheet show in the sheet, not in the app-wide alert. Wording: Title Case for buttons, rows and titles.
 - Secrets never in code or Git (`Secrets.xcconfig` is ignored).
 
 ## Tests

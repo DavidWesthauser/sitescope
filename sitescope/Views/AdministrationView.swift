@@ -4,7 +4,6 @@ import SwiftUI
 /// create or edit organizations. Who is an admin is set in the Supabase dashboard; the app cannot change it.
 struct AdministrationView: View {
     @EnvironmentObject var store: Store
-    @State private var editing: Organization?
     @State private var creating = false
 
     var body: some View {
@@ -16,27 +15,27 @@ struct AdministrationView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(profile.display_name)
-                            Text(subtitle(of: profile)).font(.caption).foregroundStyle(.secondary)
+                            Text(subtitle(of: profile)).font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
                 }
             } header: {
                 Text("People")
             } footer: {
-                Text("Deactivated people keep their data but lose all access. Nobody is deleted.")
+                Text("Inactive people keep their data but lose all access. Nobody is deleted.")
             }
             Section {
                 if store.organizations.isEmpty {
-                    Text("No organizations yet").foregroundStyle(.secondary)
+                    Text("No organizations yet.").foregroundStyle(.secondary)
                 }
                 ForEach(store.organizations) { organization in
-                    Button {
-                        editing = organization
+                    NavigationLink {
+                        OrganizationEditor(organization: organization, isNew: false)
                     } label: {
                         LabeledContent(organization.name, value: organization.status == .active ? "Active" : "Inactive")
-                    }.tint(.primary)
+                    }
                 }
-                Button("Add organization", systemImage: "plus") { creating = true }
+                Button("Add Organization", systemImage: "plus") { creating = true }
                     .accessibilityIdentifier("admin.organizations.new")
             } header: {
                 Text("Organizations")
@@ -47,17 +46,15 @@ struct AdministrationView: View {
         .navigationTitle("Administration")
         .task { await reload() }
         .refreshable { await reload() }
-        .sheet(item: $editing) { organization in
-            OrganizationEditor(organization: organization, isNew: false)
-        }
         .sheet(isPresented: $creating) {
-            OrganizationEditor(organization: Organization(name: ""), isNew: true)
+            NavigationStack { OrganizationEditor(organization: Organization(name: ""), isNew: true) }
+                .presentationDetents([.medium, .large])
         }
     }
 
     private func subtitle(of profile: Profile) -> String {
         let organization = store.organizations.first { $0.id == profile.organization_id }?.name ?? "No organization"
-        return profile.is_active ? organization : "Deactivated · \(organization)"
+        return profile.is_active ? organization : "Inactive · \(organization)"
     }
     private func reload() async {
         do { try await store.loadPeople() } catch { store.error = error.localizedDescription }
@@ -96,7 +93,7 @@ private struct PersonView: View {
                     Text(
                         profile.user_id == store.userID
                             ? "You cannot deactivate yourself."
-                            : "A deactivated person can still sign in but sees nothing.")
+                            : "An inactive person can still sign in but sees nothing.")
                 }
             }
         }
@@ -105,17 +102,20 @@ private struct PersonView: View {
     }
 }
 
-/// Creates or edits an organization: name, status and the person responsible for it.
+/// Creates (in a sheet, with Cancel and Add) or edits (pushed, with Save) an organization: name, status and the
+/// person responsible for it. Errors show in the form, because an alert from the app's root cannot appear over a sheet.
 private struct OrganizationEditor: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
     @State var organization: Organization
     let isNew: Bool
+    @State private var saving = false
+    @State private var problem: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                TextField("Organization name", text: $organization.name).accessibilityIdentifier("organization.name")
+        Form {
+            Section {
+                TextField("Organization Name", text: $organization.name).accessibilityIdentifier("organization.name")
                 Picker("Status", selection: $organization.status) {
                     Text("Active").tag(Organization.Status.active)
                     Text("Inactive").tag(Organization.Status.inactive)
@@ -124,20 +124,36 @@ private struct OrganizationEditor: View {
                     Text("Nobody").tag(UUID?.none)
                     ForEach(store.profiles) { Text($0.display_name).tag(Optional($0.user_id)) }
                 }
+            } footer: {
+                if let problem { Text(problem).foregroundStyle(Color("Warning")) }
             }
-            .navigationTitle(isNew ? "New Organization" : organization.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+        .navigationTitle(isNew ? "New Organization" : "Organization")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isNew {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        store.run {
-                            try await store.saveOrganization(organization, isNew: isNew)
-                            dismiss()
-                        }
-                    }.disabled(organization.name.trimmingCharacters(in: .whitespaces).isEmpty || store.busy)
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                if saving {
+                    ProgressView()
+                } else {
+                    Button(isNew ? "Add" : "Save") { save() }
+                        .disabled(organization.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+        }
+    }
+
+    private func save() {
+        saving = true
+        problem = nil
+        Task {
+            defer { saving = false }
+            do {
+                try await store.saveOrganization(organization, isNew: isNew)
+                dismiss()
+            } catch { problem = error.localizedDescription }
         }
     }
 }

@@ -16,7 +16,9 @@ struct AccessView: View {
                 ForEach(grants) { grant in
                     LabeledContent(grant.user?.display_name ?? store.name(of: grant.user_id), value: grant.role.label)
                         .swipeActions {
-                            Button("Remove", systemImage: "person.badge.minus", role: .destructive) { revoking = grant }
+                            Button("Remove Access", systemImage: "person.badge.minus", role: .destructive) {
+                                revoking = grant
+                            }
                         }
                         .contextMenu {
                             Button("Remove Access", systemImage: "person.badge.minus", role: .destructive) {
@@ -45,7 +47,7 @@ struct AccessView: View {
                 }
             }
         }
-        .navigationTitle("People")
+        .navigationTitle("Shared With")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -60,7 +62,7 @@ struct AccessView: View {
             AddPersonView(scope: scope).presentationDetents([.medium, .large])
         }
         .alert(
-            "Remove \(revoking?.user?.display_name ?? "this person")?",
+            "Remove “\(revoking?.user?.display_name ?? "this person")”?",
             isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }),
             presenting: revoking
         ) { grant in
@@ -92,13 +94,16 @@ struct AccessView: View {
     }
 }
 
-/// Adds a person by email with a role. Granting again changes the role.
+/// Adds a person by email with a role. Granting again changes the role. Errors show inside the sheet, because an
+/// alert from the app's root cannot appear over it.
 struct AddPersonView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
     let scope: AccessScope
     @State private var email = ""
     @State private var role = AccessRole.external
+    @State private var adding = false
+    @State private var problem: String?
 
     var body: some View {
         NavigationStack {
@@ -109,7 +114,11 @@ struct AddPersonView: View {
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("access.email")
                 } footer: {
-                    Text("They need a sitescope account with this email.")
+                    if let problem {
+                        Text(problem).foregroundStyle(Color("Warning"))
+                    } else {
+                        Text("They need a sitescope account with this email.")
+                    }
                 }
                 Section {
                     Picker("Role", selection: $role) {
@@ -128,16 +137,26 @@ struct AddPersonView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        store.run {
-                            try await store.grant(role, on: scope, toEmail: email)
-                            dismiss()
-                        }
+                    if adding {
+                        ProgressView()
+                    } else {
+                        Button("Add") { add() }
+                            .disabled(!email.contains("@"))
+                            .accessibilityIdentifier("access.grant")
                     }
-                    .disabled(!email.contains("@") || store.busy)
-                    .accessibilityIdentifier("access.grant")
                 }
             }
+        }
+    }
+    private func add() {
+        adding = true
+        problem = nil
+        Task {
+            defer { adding = false }
+            do {
+                try await store.grant(role, on: scope, toEmail: email)
+                dismiss()
+            } catch { problem = error.localizedDescription }
         }
     }
 }

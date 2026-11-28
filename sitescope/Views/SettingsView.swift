@@ -38,19 +38,14 @@ struct SettingsView: View {
             }
             Section {
                 LabeledContent("Status") { SyncStatusView() }
-                LabeledContent("Waiting Changes", value: "\(store.waitingChanges)")
+                LabeledContent("Waiting to Upload", value: "\(store.pendingChanges)")
                 Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") { Task { await store.syncNow() } }
                     .disabled(!store.isOnline || store.isSyncing)
-                if store.failedChanges > 0 {
-                    Button("Retry Failed Changes", systemImage: "arrow.clockwise") { Task { await store.retry() } }
-                }
             } header: {
                 Text("Sync")
             } footer: {
                 Text(
-                    store.syncProblem
-                        ?? "Changes are saved on this iPhone first and upload when you’re online. Swipe a failed item to the right to retry it."
-                )
+                    store.syncProblem ?? "Changes are saved on this iPhone first and upload when you’re online.")
             }
             if !store.failedItems.isEmpty {
                 Section {
@@ -61,10 +56,15 @@ struct SettingsView: View {
                         }
                         .swipeActions {
                             Button("Retry", systemImage: "arrow.clockwise") { Task { await store.retry(item.key) } }
+                                .tint(.accentColor)
                         }
                     }
+                    Button("Retry All", systemImage: "arrow.clockwise") { Task { await store.retry() } }
+                        .disabled(!store.isOnline || store.isSyncing)
                 } header: {
                     Text("Couldn’t Upload")
+                } footer: {
+                    Text("These stay on this iPhone. Swipe one to retry it alone.")
                 }
             }
             SyncNoticesSection()
@@ -106,7 +106,9 @@ struct SettingsView: View {
             Text(
                 store.waitingChanges == 0
                     ? "Your projects stay on this iPhone for the next sign-in."
-                    : "\(store.waitingChanges) changes haven’t uploaded yet. They stay on this iPhone and upload after you sign in again."
+                    : store.waitingChanges == 1
+                        ? "1 change hasn’t uploaded yet. It stays on this iPhone and uploads after you sign in again."
+                        : "\(store.waitingChanges) changes haven’t uploaded yet. They stay on this iPhone and upload after you sign in again."
             )
         }
     }
