@@ -60,6 +60,17 @@ import Foundation
         onStateChange?()
     }
 
+    /// The server's own words for refusals, but not its internals: a column or table it does not have yet means
+    /// the database is not on the version the app expects.
+    static func readable(_ error: Error) -> String {
+        let text = error.localizedDescription
+        let schema = ["schema cache", "does not exist", "column", "relation"]
+        if schema.contains(where: { text.localizedCaseInsensitiveContains($0) }) {
+            return "The server can’t store this yet. It stays on this iPhone and uploads once the server is updated."
+        }
+        return text
+    }
+
     static func isOffline(_ error: Error) -> Bool {
         guard let error = error as? URLError else { return false }
         let offline: [URLError.Code] = [
@@ -95,7 +106,7 @@ import Foundation
             } catch {
                 // Offline or signed out: stop and keep everything queued. Anything else: mark this change failed.
                 if Self.isOffline(error) || (error as? HTTPFailure)?.status == 401 { throw error }
-                let reason = error.localizedDescription
+                let reason = Self.readable(error)
                 try await storage.change { data in
                     guard let i = data.outbox.firstIndex(where: { $0.key == item.key }) else { return }
                     data.outbox[i].failures += 1
@@ -227,7 +238,15 @@ import Foundation
 
     private func pushDelete(_ key: RecordKey) async throws {
         guard let version = storage.data.version(of: key) else { return try await finish(key) }
-        if try await remote.delete(key, revision: version.revision) {
+        let deleted: Bool
+        do {
+            deleted = try await remote.delete(key, revision: version.revision)
+        } catch let failure as HTTPFailure where failure.status != 401 {
+            // Already gone from the server (e.g. removed elsewhere): the delete is done anyway.
+            guard try await remote.fetch(key) == nil else { throw failure }
+            deleted = true
+        }
+        if deleted {
             try await storage.change { $0.setVersion(nil, of: key) }
             return try await finish(key)
         }
@@ -267,7 +286,7 @@ import Foundation
         problem =
             unreadable.isEmpty
             ? nil
-            : "The server does not have \(unreadable.joined(separator: ", ")) yet (T-029); they stay on this iPhone."
+            : "The server can’t store \(unreadable.joined(separator: ", ")) yet. They stay on this iPhone until it can."
     }
 }
 

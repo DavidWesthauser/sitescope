@@ -31,6 +31,13 @@ struct RoomView: View {
         let drawings = store.annotations.filter { $0.room_id == room.id }.count
         return List {
             Section {
+                ResponsibleRow(
+                    scope: .room(project, house, room), current: room.responsible_id,
+                    canChange: store.level(on: .house(project, house)).canManage)
+            } footer: {
+                Text(AccessLevelText.footer(level, scope: "room"))
+            }
+            Section {
                 if room.map_path == nil {
                     if level.canContribute {
                         Button("Scan Room", systemImage: "camera.viewfinder") { arMode = .mapping }
@@ -45,6 +52,11 @@ struct RoomView: View {
                         Button("Draw in AR", systemImage: "pencil.tip.crop.circle") { arMode = .editing }
                             .accessibilityIdentifier("room.draw")
                     }
+                }
+                NavigationLink {
+                    TrackingTipsView()
+                } label: {
+                    Label("Scanning Tips", systemImage: "lightbulb")
                 }
             } header: {
                 Text("Scan")
@@ -66,25 +78,13 @@ struct RoomView: View {
                         .foregroundStyle(room.description.isEmpty ? .secondary : .primary)
                 }
             }
-            Section {
-                ResponsibleRow(
-                    scope: .room(project, house, room), current: room.responsible_id,
-                    canChange: store.level(on: .house(project, house)).canManage)
-                NavigationLink {
-                    TrackingTipsView()
-                } label: {
-                    Label("Scanning Tips", systemImage: "lightbulb")
-                }
-            } footer: {
-                Text(AccessLevelText.footer(level, scope: "room"))
-            }
         }
         .navigationTitle(room.name)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.refresh() }
         .toolbar {
             if level.canContribute {
-                ToolbarItem(placement: .secondaryAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis.circle") {
                         Button("Rename", systemImage: "pencil") { renaming = true }
                         if level.canManage {
@@ -96,6 +96,7 @@ struct RoomView: View {
                     }.accessibilityIdentifier("room.more")
                 }
             }
+            ToolbarItem(placement: .status) { SyncStatusView() }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { editingDescription = false }

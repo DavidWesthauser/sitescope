@@ -76,6 +76,17 @@ struct SyncNoticesSection: View {
     }
 }
 
+/// "Retry Upload" for context menus of rows the server refused.
+struct RetryMenuButton: View {
+    @EnvironmentObject var store: Store
+    let key: RecordKey
+    var body: some View {
+        if case .failed = store.syncState(of: key) {
+            Button("Retry Upload", systemImage: "arrow.clockwise") { Task { await store.retry(key) } }
+        }
+    }
+}
+
 extension View {
     /// Swipe to retry a change the server refused.
     func retrySwipe(_ key: RecordKey, store: Store) -> some View {

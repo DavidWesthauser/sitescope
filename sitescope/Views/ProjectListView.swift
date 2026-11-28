@@ -24,7 +24,10 @@ struct ProjectListView: View {
                             title: project.name, subtitle: "Responsible: \(store.name(of: project.responsible_id))",
                             systemImage: "building.2", state: store.syncState(of: RecordKey(.project, project.id)))
                     }
-                    .contextMenu { actions(for: project) }
+                    .contextMenu {
+                        RetryMenuButton(key: RecordKey(.project, project.id))
+                        actions(for: project)
+                    }
                     .swipeActions {
                         if store.level(on: .project(project)).canManage {
                             Button("Delete", systemImage: "trash", role: .destructive) { deleting = project }
@@ -72,9 +75,9 @@ struct ProjectListView: View {
             }
             .namePrompt("New Project", action: "Create", isPresented: $creating) { name in
                 store.run {
-                    let project = try await store.createProject(name: name)
+                    // Like houses and rooms, the new project appears in the list; it does not open by itself.
+                    _ = try await store.createProject(name: name)
                     query = ""
-                    path.append(.project(project.id))
                 }
             }
             .namePrompt(

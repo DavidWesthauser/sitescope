@@ -52,16 +52,17 @@ struct AccessView: View {
                 Button("Add Person", systemImage: "person.badge.plus") { adding = true }
                     .disabled(!store.isOnline).accessibilityIdentifier("access.add")
             }
+            ToolbarItem(placement: .status) { SyncStatusView() }
         }
         .task { await load() }
         .refreshable { await load() }
         .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) {
-            AddPersonView(scope: scope)
+            AddPersonView(scope: scope).presentationDetents([.medium, .large])
         }
-        .confirmationDialog(
+        .alert(
             "Remove \(revoking?.user?.display_name ?? "this person")?",
             isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } }),
-            titleVisibility: .visible, presenting: revoking
+            presenting: revoking
         ) { grant in
             Button("Remove Access", role: .destructive) {
                 store.run {

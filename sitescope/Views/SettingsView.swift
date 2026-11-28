@@ -11,12 +11,15 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                TextField("Your Name", text: $name)
-                    .textContentType(.name).submitLabel(.done)
-                    .focused($editingName)
-                    .onSubmit(saveName)
-                    .disabled(!store.isOnline || store.myProfile == nil)
-                    .accessibilityIdentifier("settings.displayName")
+                LabeledContent("Name") {
+                    TextField("Your name", text: $name)
+                        .multilineTextAlignment(.trailing)
+                        .textContentType(.name).submitLabel(.done)
+                        .focused($editingName)
+                        .onSubmit(saveName)
+                        .disabled(!store.isOnline || store.myProfile == nil)
+                        .accessibilityIdentifier("settings.displayName")
+                }
                 LabeledContent("Email", value: store.accountEmail ?? "–")
                 if store.isAdmin {
                     NavigationLink {
@@ -49,6 +52,21 @@ struct SettingsView: View {
                         ?? "Changes are saved on this iPhone first and upload when you’re online. Swipe a failed item to the right to retry it."
                 )
             }
+            if !store.failedItems.isEmpty {
+                Section {
+                    ForEach(store.failedItems, id: \.key) { item in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                            Text(item.reason).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        .swipeActions {
+                            Button("Retry", systemImage: "arrow.clockwise") { Task { await store.retry(item.key) } }
+                        }
+                    }
+                } header: {
+                    Text("Couldn’t Upload")
+                }
+            }
             SyncNoticesSection()
             Section {
                 Picker("Appearance", selection: $appearance) {
@@ -57,7 +75,7 @@ struct SettingsView: View {
                 NavigationLink {
                     TrackingTipsView()
                 } label: {
-                    Label("Scanning Tips", systemImage: "camera.viewfinder")
+                    Label("Scanning Tips", systemImage: "lightbulb")
                 }
             }
             Section {
@@ -79,7 +97,7 @@ struct SettingsView: View {
         .onChange(of: editingName) { _, editing in
             if !editing { saveName() }
         }
-        .confirmationDialog("Sign Out?", isPresented: $signingOut, titleVisibility: .visible) {
+        .alert("Sign Out?", isPresented: $signingOut) {
             Button("Sign Out", role: .destructive) { store.run { await store.signOut() } }
             Button("Cancel", role: .cancel) {}
         } message: {

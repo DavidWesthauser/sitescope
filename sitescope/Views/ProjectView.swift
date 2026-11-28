@@ -27,7 +27,24 @@ struct ProjectView: View {
         let level = store.level(on: .project(project))
         let houses = store.houses.filter { $0.project_id == project.id }
         return List {
+            // Who is responsible sits first on every level, so it is in the same place everywhere.
             Section {
+                ResponsibleRow(scope: .project(project), current: project.responsible_id, canChange: store.isAdmin)
+            } footer: {
+                Text(AccessLevelText.footer(level, scope: "project"))
+            }
+            Section {
+                if houses.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Houses", systemImage: "house")
+                    } description: {
+                        Text(
+                            level.canManage
+                                ? "Add the buildings of this project." : "No houses are shared with you yet.")
+                    } actions: {
+                        if level.canManage { Button("Add House") { adding = true }.buttonStyle(.borderedProminent) }
+                    }
+                }
                 ForEach(houses) { house in
                     NavigationLink(value: Route.house(house.id)) {
                         RecordRow(
@@ -35,6 +52,7 @@ struct ProjectView: View {
                             state: store.syncState(of: RecordKey(.house, house.id)))
                     }
                     .contextMenu {
+                        RetryMenuButton(key: RecordKey(.house, house.id))
                         if store.level(on: .house(project, house)).canManage {
                             Button("Rename", systemImage: "pencil") { renamingHouse = house }
                             Button("Delete", systemImage: "trash", role: .destructive) { deletingHouse = house }
@@ -48,23 +66,7 @@ struct ProjectView: View {
                     .retrySwipe(RecordKey(.house, house.id), store: store)
                 }
             } header: {
-                if !houses.isEmpty { Text("Houses") }
-            }
-            Section {
-                ResponsibleRow(scope: .project(project), current: project.responsible_id, canChange: store.isAdmin)
-            } footer: {
-                Text(AccessLevelText.footer(level, scope: "project"))
-            }
-        }
-        .overlay {
-            if houses.isEmpty {
-                ContentUnavailableView {
-                    Label("No Houses", systemImage: "house")
-                } description: {
-                    Text(level.canManage ? "Add the buildings of this project." : "No houses are shared with you yet.")
-                } actions: {
-                    if level.canManage { Button("Add House") { adding = true }.buttonStyle(.borderedProminent) }
-                }
+                Text("Houses")
             }
         }
         .navigationTitle(project.name)
@@ -74,7 +76,7 @@ struct ProjectView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add House", systemImage: "plus") { adding = true }.accessibilityIdentifier("houses.new")
                 }
-                ToolbarItem(placement: .secondaryAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis.circle") {
                         Button("Rename", systemImage: "pencil") { renaming = true }
                         Button("People", systemImage: "person.2") { showingPeople = true }

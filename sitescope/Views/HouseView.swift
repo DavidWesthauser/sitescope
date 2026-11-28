@@ -30,6 +30,24 @@ struct HouseView: View {
         let rooms = store.rooms.filter { $0.house_id == house.id }
         return List {
             Section {
+                ResponsibleRow(
+                    scope: .house(project, house), current: house.responsible_id,
+                    canChange: store.level(on: .project(project)).canManage)
+            } footer: {
+                Text(AccessLevelText.footer(level, scope: "house"))
+            }
+            Section {
+                if rooms.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Rooms", systemImage: "door.left.hand.open")
+                    } description: {
+                        Text(level.canContribute ? "Add a room, then scan it." : "No rooms are shared with you yet.")
+                    } actions: {
+                        if level.canContribute {
+                            Button("Add Room") { adding = true }.buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
                 ForEach(rooms) { room in
                     let scope = AccessScope.room(project, house, room)
                     NavigationLink(value: Route.room(room.id)) {
@@ -39,6 +57,7 @@ struct HouseView: View {
                             state: store.syncState(of: RecordKey(.room, room.id)))
                     }
                     .contextMenu {
+                        RetryMenuButton(key: RecordKey(.room, room.id))
                         if store.level(on: scope).canContribute {
                             Button("Rename", systemImage: "pencil") { renamingRoom = room }
                         }
@@ -54,27 +73,7 @@ struct HouseView: View {
                     .retrySwipe(RecordKey(.room, room.id), store: store)
                 }
             } header: {
-                if !rooms.isEmpty { Text("Rooms") }
-            }
-            Section {
-                ResponsibleRow(
-                    scope: .house(project, house), current: house.responsible_id,
-                    canChange: store.level(on: .project(project)).canManage)
-            } footer: {
-                Text(AccessLevelText.footer(level, scope: "house"))
-            }
-        }
-        .overlay {
-            if rooms.isEmpty {
-                ContentUnavailableView {
-                    Label("No Rooms", systemImage: "door.left.hand.open")
-                } description: {
-                    Text(level.canContribute ? "Add a room, then scan it." : "No rooms are shared with you yet.")
-                } actions: {
-                    if level.canContribute {
-                        Button("Add Room") { adding = true }.buttonStyle(.borderedProminent)
-                    }
-                }
+                Text("Rooms")
             }
         }
         .navigationTitle(house.name)
@@ -86,7 +85,7 @@ struct HouseView: View {
                 }
             }
             if level.canManage {
-                ToolbarItem(placement: .secondaryAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis.circle") {
                         Button("Rename", systemImage: "pencil") { renaming = true }
                         Button("People", systemImage: "person.2") { showingPeople = true }

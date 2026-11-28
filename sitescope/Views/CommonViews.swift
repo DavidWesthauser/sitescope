@@ -36,11 +36,12 @@ extension View {
         modifier(NamePrompt(title: title, action: action, isPresented: isPresented, initial: initial, save: save))
     }
 
-    /// Confirms deleting something by name; the destructive action is never the only way out.
+    /// Confirms deleting something by name, as an alert: its action can come from a menu, a swipe or a context
+    /// menu, so there is no single button a popover could point at. Cancel is always offered.
     func deleteConfirmation(
         _ name: String, isPresented: Binding<Bool>, message: String, delete: @escaping () -> Void
     ) -> some View {
-        confirmationDialog("Delete “\(name)”?", isPresented: isPresented, titleVisibility: .visible) {
+        alert("Delete “\(name)”?", isPresented: isPresented) {
             Button("Delete", role: .destructive, action: delete)
             Button("Cancel", role: .cancel) {}
         } message: {

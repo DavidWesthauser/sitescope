@@ -190,6 +190,19 @@ import SwiftUI
         guard let item = outbox.first(where: { $0.key == key }) else { return .synced }
         return item.lastError.map(ItemSyncState.failed) ?? .waiting
     }
+    /// Changes the server refused, with a name for each (also for records deleted here) and the reason.
+    var failedItems: [(key: RecordKey, name: String, reason: String)] {
+        outbox.compactMap { item in
+            guard let reason = item.lastError else { return nil }
+            let kind =
+                ["project": "Project", "house": "House", "room": "Room", "drawing": "Drawing"][
+                    item.key.entity.rawValue] ?? "Item"
+            let name =
+                item.action == .delete
+                ? "\(kind) deleted on this iPhone" : (storage?.data.name(of: item.key) ?? kind)
+            return (item.key, name, reason)
+        }
+    }
     var waitingChanges: Int { outbox.count }
     var failedChanges: Int { outbox.filter { $0.lastError != nil }.count }
 
@@ -246,7 +259,12 @@ import SwiftUI
     func createProject(name value: String) async throws -> Project {
         let project = Project(name: try DisplayName.validated(value), responsible_id: userID)
         try await requireRepository().createProject(project)
+        try await ownCreated(.project(project))
         return project
+    }
+    /// The creator is responsible for what they create (trigger `set_creator`), also before the server answers.
+    private func ownCreated(_ scope: AccessScope) async throws {
+        try await storage?.change { $0.levels[scope.cacheKey] = AccessLevel.responsible.rawValue }
     }
     func renameProject(_ project: Project, name value: String) async throws {
         try await requireRepository().renameProject(project, to: try DisplayName.validated(value))
@@ -258,6 +276,7 @@ import SwiftUI
     func createHouse(in project: Project, name value: String) async throws {
         let house = House(project_id: project.id, name: try DisplayName.validated(value), responsible_id: userID)
         try await requireRepository().createHouse(house)
+        try await ownCreated(.house(project, house))
     }
     func renameHouse(_ house: House, name value: String) async throws {
         try await requireRepository().renameHouse(house, to: try DisplayName.validated(value))
@@ -270,6 +289,9 @@ import SwiftUI
         var room = Room(project_id: house.project_id, house_id: house.id, name: try DisplayName.validated(value))
         room.responsible_id = userID
         try await requireRepository().createRoom(room)
+        if let project = projects.first(where: { $0.id == house.project_id }) {
+            try await ownCreated(.room(project, house, room))
+        }
     }
     func renameRoom(_ room: Room, name value: String) async throws {
         try await requireRepository().renameRoom(room, to: try DisplayName.validated(value))
