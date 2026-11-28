@@ -68,9 +68,14 @@ struct Configuration {
             // Only an expired session or missing rights is helped by refreshing; a wrong password is not.
             let hint = [401, 403].contains(code) ? " Refresh or sign in again if access expired." : ""
             let sentence = message.hasSuffix(".") ? message : message + "."
-            throw AppError.message(sentence + hint)
+            throw HTTPFailure(status: code, message: sentence + hint)
         }
         return data
+    }
+    /// A signed-in REST or storage request; sync builds its conditional reads and writes on it.
+    func send(_ method: String, _ path: String, body: Data? = nil, prefer: String? = nil) async throws -> Data {
+        let access = try await token()
+        return try await raw(path, method: method, body: body, token: access, prefer: prefer)
     }
     func authenticate(email: String, password: String, register: Bool) async throws -> Bool {
         let body = try JSONSerialization.data(withJSONObject: ["email": email, "password": password])
@@ -167,6 +172,13 @@ struct Configuration {
         guard data.count <= 100_000_000 else { throw AppError.message("Room file exceeds the 100 MB safety limit.") }
         return data
     }
+}
+
+/// The server answered, but not with success. `status` tells sync a conflict (409) from a refusal.
+struct HTTPFailure: LocalizedError, Equatable {
+    let status: Int
+    let message: String
+    var errorDescription: String? { message }
 }
 
 enum Vault {

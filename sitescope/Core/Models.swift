@@ -40,34 +40,15 @@ public struct Marker: Codable, Equatable, Sendable {
         self.room_from_marker = room_from_marker
     }
 }
-/// Building progress of a room (`rooms.status`).
-public enum RoomStatus: String, Codable, CaseIterable, Identifiable, Sendable {
-    case planned
-    case inProgress = "in_progress"
-    case built
-    public var id: String { rawValue }
-    public var label: String {
-        switch self {
-        case .planned: return "Planned"
-        case .inProgress: return "In progress"
-        case .built: return "Built"
-        }
-    }
-}
-/// A `rooms` row plus the AR data the app keeps for scanning. The AR fields have no database columns yet (T-029):
-/// they are optional when decoding and never sent to the server.
+/// A room: name, description, the scan (`coordinate_id`, `map_path`, `scan_guide_jpeg`, `surfaces`) and, in
+/// `Annotation`, its drawings. Columns as in the database target of T-029; missing ones decode as defaults.
 public struct Room: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var project_id: UUID
     public var house_id: UUID
     public var name: String
-    /// Metres; the database rounds to centimetres.
-    public var height: Double?
-    public var length: Double?
-    public var width: Double?
-    /// `length * width`, computed by the database.
-    public var area: Double?
-    public var status: RoomStatus = .planned
+    /// Free text about the room and the work in it; at most `maximumDescriptionLength` characters.
+    public var description: String = ""
     public var responsible_id: UUID?
     public var spatial_version: Int = 1
     public var coordinate_id: UUID = UUID()
@@ -85,22 +66,19 @@ public struct Room: Codable, Identifiable, Equatable, Sendable {
         self.name = name
     }
     private enum CodingKeys: String, CodingKey {
-        case id, project_id, house_id, name, height, length, width, area, status, responsible_id
+        case id, project_id, house_id, name, description, responsible_id
         case spatial_version, coordinate_id, map_path, scan_guide_jpeg, marker, reference_points, reference_notes
         case surfaces
     }
-    /// Database rows have no AR columns yet; missing ones keep their defaults.
+    public static let maximumDescriptionLength = 4000
+    /// Rows from older databases lack columns; missing ones keep their defaults.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         project_id = try c.decode(UUID.self, forKey: .project_id)
         house_id = try c.decode(UUID.self, forKey: .house_id)
         name = try c.decode(String.self, forKey: .name)
-        height = try c.decodeIfPresent(Double.self, forKey: .height)
-        length = try c.decodeIfPresent(Double.self, forKey: .length)
-        width = try c.decodeIfPresent(Double.self, forKey: .width)
-        area = try c.decodeIfPresent(Double.self, forKey: .area)
-        status = try c.decodeIfPresent(RoomStatus.self, forKey: .status) ?? .planned
+        description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
         responsible_id = try c.decodeIfPresent(UUID.self, forKey: .responsible_id)
         spatial_version = try c.decodeIfPresent(Int.self, forKey: .spatial_version) ?? 1
         coordinate_id = try c.decodeIfPresent(UUID.self, forKey: .coordinate_id) ?? id
@@ -114,6 +92,7 @@ public struct Room: Codable, Identifiable, Equatable, Sendable {
     /// Rejects malformed or oversized records before they are stored or sent. The scan guide must be a
     /// strict base64 JPEG of at most 64 KiB (the 87_384-character cap is that size encoded).
     public func validate() throws {
+        guard description.count <= Self.maximumDescriptionLength else { throw SpatialError.invalidGeometry }
         if let guide = scan_guide_jpeg {
             guard guide.utf8.count <= 87_384,
                 let bytes = Data(base64Encoded: guide), bytes.count >= 4, bytes.count <= 65_536,
@@ -144,25 +123,6 @@ public struct Room: Codable, Identifiable, Equatable, Sendable {
     }
 }
 public enum AnnotationKind: String, Codable, CaseIterable, Sendable { case marker, text, area, line, arrow, image }
-public enum TaskStatus: String, Codable, CaseIterable, Sendable {
-    case todo
-    case inProgress = "in_progress"
-    case completed
-    public var label: String {
-        switch self {
-        case .todo: return "To do"
-        case .inProgress: return "In progress"
-        case .completed: return "Completed"
-        }
-    }
-    public var symbol: String {
-        switch self {
-        case .todo: return "circle"
-        case .inProgress: return "clock"
-        case .completed: return "checkmark.circle.fill"
-        }
-    }
-}
 public struct SpatialImage: Codable, Equatable, Sendable {
     public var path: String
     public var width: Float
@@ -179,6 +139,8 @@ public struct SpatialImage: Codable, Equatable, Sendable {
         else { throw SpatialError.invalidGeometry }
     }
 }
+/// A drawing placed in a room's scan: a freehand line, a marked area or a pinned photo. It has no text of its own;
+/// the room's description holds what to do. `marker`, `text` and `arrow` are no longer created (T-027).
 public struct Annotation: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID = UUID()
     public var room_id: UUID
@@ -189,25 +151,17 @@ public struct Annotation: Codable, Identifiable, Equatable, Sendable {
     public var points: [Point3]
     public var strokes: [[Point3]]?
     public var image: SpatialImage?
-    public var title: String
-    public var detail: String
-    public var status: TaskStatus = .todo
-    public var priority: Int = 1
-    public init(room: Room, kind: AnnotationKind, pose: Pose, points: [Point3] = [], title: String, detail: String) {
+    public init(room: Room, kind: AnnotationKind, pose: Pose, points: [Point3] = []) {
         room_id = room.id
         coordinate_id = room.coordinate_id
         self.kind = kind
         self.pose = pose
         self.points = points
-        self.title = title
-        self.detail = detail
     }
     /// Checks the annotation against its room. The count limits bound the size of one annotation,
     /// so a malformed or hostile import cannot exhaust memory or rendering time.
     public func validate(room: Room) throws {
-        guard room_id == room.id, coordinate_id == room.coordinate_id,
-            !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.count <= 240,
-            (0...2).contains(priority), points.count <= 128,
+        guard room_id == room.id, coordinate_id == room.coordinate_id, points.count <= 128,
             points.allSatisfy({ [$0.x, $0.y, $0.z].allSatisfy(\.isFinite) }),
             kind != .area || points.count >= 3,
             (kind != .line && kind != .arrow) || points.count >= 2

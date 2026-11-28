@@ -16,7 +16,7 @@
             }
         }
         func testScreenStatesAtCompactSizesAndLargeText() async throws {
-            let store = Store(repository: InMemoryRepository())
+            let store = Store(offlineFileURL: Self.temporaryFile())
             let project = Project(name: "Layout fixture")
             var room = Room(project_id: project.id, house_id: UUID(), name: "Ein langer Raumname für die Layoutprüfung")
             room.map_path = "test-only.worldmap"
@@ -114,65 +114,39 @@
                 }
                 ar.stop()
             }
-            let note = Annotation(
-                room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(1, 0, 0))],
-                title: "Eine längere Arbeitsanweisung für die Wand",
-                detail: "Mehrzeilige Beschreibung einer Aufgabe für den Techniker.")
-            for manager in [true, false] {
-                try await snapshot(
-                    AnyView(NavigationStack { TaskEditor(item: note, room: room, manager: manager) }), store: store,
-                    name: manager ? "task-manager" : "task-worker", size: CGSize(width: 375, height: 667))
-            }
-            try await snapshot(
-                AnyView(
-                    DrawingWorkDetails(
-                        title: .constant("Eine längere Anweisung"),
-                        details: .constant("Mehrzeiliger Inhalt für die Prüfung."), priority: .constant(1))),
-                store: store, name: "work-details-sheet", size: CGSize(width: 375, height: 667))
             try await snapshot(
                 AnyView(DrawingPlacementSettings(measured: .constant(true), distance: .constant(1.5))), store: store,
                 name: "placement-sheet", size: CGSize(width: 375, height: 667))
             try await snapshot(
-                AnyView(AuthenticationView()), store: store, name: "login", size: CGSize(width: 375, height: 667))
+                AnyView(SignInView()), store: store, name: "login", size: CGSize(width: 375, height: 667))
             try await snapshot(
-                AnyView(NavigationStack { SettingsView() }), store: store, name: "settings",
-                size: CGSize(width: 375, height: 667))
-            try await snapshot(
-                AnyView(ProjectDashboard()), store: store, name: "empty-projects", size: CGSize(width: 375, height: 667)
-            )
-            store.projects = [project]
-            store.rooms = [room]
-            var complete = note
-            complete.id = UUID()
-            complete.status = .completed
-            complete.title = "Finished instruction"
-            var active = note
-            active.id = UUID()
-            active.status = .inProgress
-            active.priority = 2
-            active.title = "High priority instruction"
-            store.annotations = [note, complete, active]
+                AnyView(ProjectListView()), store: store, name: "empty-projects", size: CGSize(width: 375, height: 667))
+            // A project with a house and a scanned room with one drawing, as the phone would have stored it.
             let house = House(id: room.house_id, project_id: project.id, name: "Haus A")
-            store.houses = [house]
-            store.rooms = [room]
-            try await snapshot(
-                AnyView(ProjectDashboard()), store: store, name: "populated-projects",
-                size: CGSize(width: 375, height: 667))
-            try await snapshot(
-                AnyView(NavigationStack { ProjectDetail(project: project) }), store: store, name: "project-rooms",
-                size: CGSize(width: 375, height: 667))
-            try await snapshot(
-                AnyView(NavigationStack { HouseDetail(project: project, house: house) }), store: store,
-                name: "house-rooms", size: CGSize(width: 375, height: 667))
-            try await snapshot(
-                AnyView(NavigationStack { RoomDetail(project: project, house: house, initialRoom: room) }),
-                store: store,
-                name: "room-progress", size: CGSize(width: 375, height: 667))
-            try await snapshot(
-                AnyView(
-                    NavigationStack { RoomDetail(project: project, house: house, initialRoom: room) }.environment(
-                        \.dynamicTypeSize, .accessibility1)), store: store, name: "room-progress-large-text",
-                size: CGSize(width: 375, height: 667))
+            room.description = "Steckdosen an der Nordwand versetzen. Fliesen erst nach der Abnahme."
+            let drawing = Annotation(
+                room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(1, 0, 0))])
+            var data = LocalData()
+            data.projects = [project]
+            data.houses = [house]
+            data.rooms = [room]
+            data.drawings = [drawing]
+            data.outbox = [OutboxItem(key: RecordKey(.room, room.id), action: .upsert)]
+            let populated = try Self.store(with: data)
+            for (name, view) in [
+                ("populated-projects", AnyView(ProjectListView())),
+                ("project-houses", AnyView(NavigationStack { ProjectView(projectID: project.id) })),
+                ("house-rooms", AnyView(NavigationStack { HouseView(houseID: house.id) })),
+                ("room", AnyView(NavigationStack { RoomView(roomID: room.id) })),
+                (
+                    "room-large-text",
+                    AnyView(
+                        NavigationStack { RoomView(roomID: room.id) }.environment(\.dynamicTypeSize, .accessibility1))
+                ),
+                ("settings", AnyView(NavigationStack { SettingsView() })),
+            ] {
+                try await snapshot(view, store: populated, name: name, size: CGSize(width: 375, height: 667))
+            }
             try await snapshot(
                 AnyView(NavigationStack { TrackingTipsView() }), store: store, name: "tracking-tips",
                 size: CGSize(width: 375, height: 667))
@@ -191,8 +165,7 @@
             let room = Room(project_id: UUID(), house_id: UUID(), name: "Tracking fixture")
             let ar = ARController(room: room, mode: .editing)
             let item = Annotation(
-                room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(1, 0, 0))],
-                title: "Saved drawing", detail: "")
+                room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(1, 0, 0))])
             ar.annotations = [item]
             ar.updateTracking(.none)
             ar.beginStroke()
@@ -208,13 +181,13 @@
             ar.stop()
         }
         func testFailedOrSupersededImageRestoreCannotUseAnOlderDraft() async throws {
-            let store = Store(repository: InMemoryRepository())
+            let store = Store(offlineFileURL: Self.temporaryFile())
             let room = Room(project_id: UUID(), house_id: UUID(), name: "Image fixture")
             let ar = ARController(room: room, mode: .editing)
             let data = try XCTUnwrap(sampleImage().pngData())
             try await ar.setImage(data)
             XCTAssertNotNil(ar.imageData)
-            var missing = Annotation(room: room, kind: .image, pose: .identity, title: "Other image", detail: "")
+            var missing = Annotation(room: room, kind: .image, pose: .identity)
             missing.image = SpatialImage(path: "missing/fixture.png", width: 0.4, height: 0.25)
             let restore = ar.beginImageRequest(clearExisting: true)
             do {
@@ -240,14 +213,14 @@
             ar.stop()
         }
         func testImageReloadPrunesOldTexturesAndCannotRenderAfterStop() async throws {
-            let store = Store(repository: InMemoryRepository())
+            let store = Store(offlineFileURL: Self.temporaryFile())
             let room = Room(project_id: UUID(), house_id: UUID(), name: "Texture fixture")
             let data = try XCTUnwrap(sampleImage().pngData())
             var items: [Annotation] = []
             for index in 0..<2 {
                 let path = "fixture/room/\(index).png"
                 try await store.uploadAsset(path: path, data: data, type: "image/png")
-                var item = Annotation(room: room, kind: .image, pose: .identity, title: "Image \(index)", detail: "")
+                var item = Annotation(room: room, kind: .image, pose: .identity)
                 item.image = SpatialImage(path: path, width: 0.4, height: 0.25)
                 items.append(item)
             }
@@ -285,8 +258,7 @@
             XCTAssertEqual(ar.view.scene.anchors.count, 24)
             XCTAssertEqual(ar.view.scene.anchors.reduce(0, { $0 + $1.children.count }), 48)
             let instruction = Annotation(
-                room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(1, 0, 0))],
-                title: "Keep this drawing", detail: "")
+                room: room, kind: .line, pose: .identity, points: [Point3(.zero), Point3(SIMD3(1, 0, 0))])
             ar.annotations = [instruction]
             var distantPose = matrix_identity_float4x4
             distantPose.columns.3.x = 1000
@@ -362,7 +334,7 @@
             let ar = ARController(room: room, mode: .walkthrough)
             ar.updateTracking(.none)
             ar.annotations = [
-                Annotation(room: room, kind: .text, pose: .identity, title: "Wall instruction", detail: "")
+                Annotation(room: room, kind: .text, pose: .identity)
             ]
             ar.localization.propose(.identity, method: .map)
             ar.confirm()
@@ -408,7 +380,7 @@
             XCTAssertTrue(ar.view.scene.anchors.isEmpty)
         }
         func testImageTexturesStayWithinBudgetAndOverflowShowsOutlines() async throws {
-            let store = Store(repository: InMemoryRepository())
+            let store = Store(offlineFileURL: Self.temporaryFile())
             let room = Room(project_id: UUID(), house_id: UUID(), name: "Texture budget fixture")
             let data = try XCTUnwrap(sampleImage().pngData())
             let total = ARController.maximumImageTextures + 3
@@ -416,7 +388,7 @@
             for index in 0..<total {
                 let path = "fixture/room/\(String(format:"%03d",index)).png"
                 try await store.uploadAsset(path: path, data: data, type: "image/png")
-                var item = Annotation(room: room, kind: .image, pose: .identity, title: "Image \(index)", detail: "")
+                var item = Annotation(room: room, kind: .image, pose: .identity)
                 item.image = SpatialImage(path: path, width: 0.4, height: 0.25)
                 items.append(item)
             }
@@ -440,7 +412,7 @@
             let ar = ARController(room: room, mode: .walkthrough)
             ar.updateTracking(.none)
             ar.annotations = [
-                Annotation(room: room, kind: .text, pose: .identity, title: "Wall instruction", detail: "")
+                Annotation(room: room, kind: .text, pose: .identity)
             ]
             ar.localization.propose(.identity, method: .map)
             ar.confirm()
@@ -453,7 +425,7 @@
             ar.confirm()
             XCTAssertTrue(ar.view.scene.anchors.first === built)  // Recovery re-attaches; no mesh regeneration.
             ar.annotations.append(
-                Annotation(room: room, kind: .text, pose: .identity, title: "Second instruction", detail: ""))
+                Annotation(room: room, kind: .text, pose: .identity))
             ar.render()
             XCTAssertEqual(ar.view.scene.anchors.count, 1)
             XCTAssertFalse(ar.view.scene.anchors.first === built)
@@ -493,10 +465,9 @@
             ar.stop()
         }
         func testSmoothSeparatedStrokeAndImageRendering() async throws {
-            let repository = InMemoryRepository()
-            let store = Store(repository: repository)
-            try await store.createProject(name: "Storage fixture")
-            let project = try XCTUnwrap(store.projects.first)
+            let file = Self.temporaryFile()
+            let store = Store(offlineFileURL: file)
+            let project = try await store.createProject(name: "Storage fixture")
             try await store.createHouse(in: project, name: "House fixture")
             let house = try XCTUnwrap(store.houses.first)
             try await store.createRoom(in: house, name: "Rendering fixture")
@@ -508,20 +479,19 @@
             let a = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(0.3, 0, 0)), Point3(SIMD3(0.4, 0.3, 0))]
             let b = [Point3(SIMD3<Float>(2, 2, 0)), Point3(SIMD3(2.5, 2, 0))]
             var drawing = Annotation(
-                room: room, kind: .line, pose: .identity, points: a, title: "Zeichnung", detail: "")
+                room: room, kind: .line, pose: .identity, points: a)
             drawing.strokes = [a, b]
             try await ar.setImage(sampleImage().pngData()!)
             let path = "\(project.id.uuidString.lowercased())/\(room.id.uuidString.lowercased())/fixture.png"
             let bytes = try XCTUnwrap(ar.imageData)
             try await store.uploadAsset(path: path, data: bytes, type: "image/png")
             var image = Annotation(
-                room: room, kind: .image, pose: .identity, points: [Point3(.zero)], title: "Bild", detail: "")
+                room: room, kind: .image, pose: .identity, points: [Point3(.zero)])
             image.image = SpatialImage(path: path, width: 0.4, height: 0.25)
-            try await store.saveInstruction(image, room: room, replacing: false)
-            try await store.saveInstruction(drawing, room: room, replacing: false)
-            // A second store on the same storage sees what the first one saved.
-            let reopened = Store(repository: repository)
-            try await reopened.loadAnnotations(room)
+            try await store.saveDrawing(image, room: room)
+            try await store.saveDrawing(drawing, room: room)
+            // After a relaunch, the phone's copy still has both drawings and the photo.
+            let reopened = Store(offlineFileURL: file)
             XCTAssertEqual(reopened.annotations.first(where: { $0.id == image.id }), image)
             XCTAssertEqual(reopened.annotations.first(where: { $0.id == drawing.id })?.strokes?.count, 2)
             let restoredBytes = try await reopened.requireRepository().downloadAsset(path: path)
@@ -539,6 +509,19 @@
             XCTAssertNotNil(ar.imageData)
             XCTAssertNotNil(ar.draftImage)
             ar.stop()
+        }
+        /// A fresh file for one test's phone storage.
+        static func temporaryFile() -> URL {
+            FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                .appendingPathComponent("data.json")
+        }
+        /// A store that opens `data` as if the phone had saved it.
+        static func store(with data: LocalData) throws -> Store {
+            let file = temporaryFile()
+            try FileManager.default.createDirectory(
+                at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(data).write(to: file)
+            return Store(offlineFileURL: file)
         }
         private func snapshot(_ content: AnyView, store: Store, name: String, size: CGSize) async throws {
             let host = UIHostingController(rootView: content.environmentObject(store))

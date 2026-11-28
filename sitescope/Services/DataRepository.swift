@@ -1,17 +1,8 @@
 import Foundation
 
-/// Where projects, houses, rooms, instructions and their files are stored. View models only talk to this protocol;
-/// `CloudRepository` implements it with Supabase. Every implementation validates records before it stores them.
+/// Where projects, houses, rooms, scans and drawings are stored. Screens and the AR screen only talk to this
+/// protocol; `LocalRepository` writes to the phone first and queues the change for sync (T-008).
 @MainActor protocol DataRepository: AnyObject {
-    /// The signed-in user.
-    var userID: UUID? { get }
-
-    func loadProjects() async throws -> [Project]
-    func loadHouses(of project: Project) async throws -> [House]
-    func loadRooms(of house: House) async throws -> [Room]
-    func loadRoom(id: UUID) async throws -> Room
-    func loadAnnotations(of room: Room) async throws -> [Annotation]
-
     func createProject(_ project: Project) async throws
     func renameProject(_ project: Project, to name: String) async throws
     func deleteProject(_ project: Project) async throws
@@ -22,22 +13,22 @@ import Foundation
 
     func createRoom(_ room: Room) async throws
     func renameRoom(_ room: Room, to name: String) async throws
-    /// Name, dimensions and status (level ≥ 2 on the room).
-    func updateRoomDetails(_ room: Room) async throws
+    func describeRoom(_ room: Room, as text: String) async throws
     func deleteRoom(_ room: Room) async throws
     /// Saves a scanned room map. A published map is never replaced.
     func publishRoom(_ room: Room) async throws
 
-    /// Without edit rights only the status changes; with them the whole task.
-    func saveTask(_ item: Annotation, in room: Room, canEdit: Bool) async throws
-    func saveInstruction(_ item: Annotation, in room: Room, replacing: Bool) async throws
-    func deleteTask(_ item: Annotation) async throws
+    func loadAnnotations(of room: Room) async throws -> [Annotation]
+    func saveDrawing(_ item: Annotation, in room: Room) async throws
+    func deleteDrawing(_ item: Annotation) async throws
 
+    /// Reads a scan or photo; from the phone if it is there, otherwise from the server.
     func downloadAsset(path: String) async throws -> Data
+    /// Saves a file on the phone; it goes to the server with the next sync.
     func uploadAsset(path: String, data: Data, type: String) async throws
 }
 
-/// Accounts and rights (docs/DATABASE_API.md, "Permissions"). The server decides; these calls read and change them.
+/// Accounts and rights (docs/DATABASE_API.md, "Permissions"). These need the network; the server decides.
 @MainActor protocol AccessManagement: AnyObject {
     func level(on scope: AccessScope) async throws -> AccessLevel
     func isAdmin() async throws -> Bool
@@ -63,8 +54,8 @@ import Foundation
 
 /// Rules checked before a write.
 enum RecordRules {
-    static func checkInstruction(_ item: Annotation, in room: Room) throws {
+    static func checkDrawing(_ item: Annotation, in room: Room) throws {
         try item.validate(room: room)
-        guard room.map_path != nil else { throw AppError.message("Map the room before placing instructions.") }
+        guard room.map_path != nil else { throw AppError.message("Scan the room before drawing in it.") }
     }
 }

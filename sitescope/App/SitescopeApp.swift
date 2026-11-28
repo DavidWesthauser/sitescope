@@ -3,6 +3,7 @@ import UIKit
 
 @main struct SitescopeApp: App {
     @StateObject private var store = Store()
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
     init() {
         // HIG (Text fields): show a Clear button at the trailing end of single-line text fields.
@@ -16,33 +17,27 @@ import UIKit
     }
     var body: some Scene {
         WindowGroup {
-            // The app is only usable while signed in.
+            // The app is only usable while signed in; signed in, it works offline.
             Group {
                 if store.signedIn {
-                    ProjectDashboard()
+                    ProjectListView()
                 } else {
-                    AuthenticationView()
+                    SignInView()
                 }
             }
             .environmentObject(store)
             .appAppearance(appearance)
             .alert(
-                "sitescope",
+                "Couldn’t Complete the Action",
                 isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })
             ) {
                 Button("OK") { store.error = nil }
             } message: {
                 Text(store.error ?? "")
             }
-            .overlay {
-                if store.busy {
-                    ZStack {
-                        // Dimming scrim; black at low opacity is the system convention in both appearances.
-                        Color.black.opacity(0.12).ignoresSafeArea()
-                        ProgressView("Working…").padding(24).background(
-                            .regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    }
-                }
+            // Coming back to the app uploads what waited and fetches what others changed (T-008).
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { store.syncSoon() }
             }
         }
     }

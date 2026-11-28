@@ -323,9 +323,7 @@ extension ARController {
     }
     /// Stores points relative to the first draft point in the drawing plane's frame, so the annotation moves with
     /// its surface rather than with the session origin. Throws unless the room is aligned and the shape validates.
-    func makeAnnotation(kind: AnnotationKind, title: String, detail: String, priority: Int, image: SpatialImage? = nil)
-        throws -> Annotation
-    {
+    func makeAnnotation(kind: AnnotationKind, image: SpatialImage? = nil) throws -> Annotation {
         guard localization.roomToSession != nil, let first = draft.first else {
             throw AppError.message("Capture a point after aligning the room.")
         }
@@ -339,9 +337,7 @@ extension ARController {
         let points =
             kind == .line
             ? Array((paths.first ?? []).prefix(128)) : draft.map { Point3((inverse * SIMD4($0.vector, 1)).xyz) }
-        var result = Annotation(
-            room: room, kind: kind, pose: try Pose(matrix), points: points, title: title, detail: detail)
-        result.priority = priority
+        var result = Annotation(room: room, kind: kind, pose: try Pose(matrix), points: points)
         result.image = image
         if kind == .line { result.strokes = paths }
         do { try result.validate(room: room) } catch {

@@ -33,7 +33,8 @@ final class AccessTests: XCTestCase {
         XCTAssertEqual(AccessLevel(serverValue: 2), .member)
     }
 
-    /// A `rooms` row of the design has no AR columns; it still decodes, with a coordinate system tied to the room.
+    /// A `rooms` row of today's hosted design (dimensions, no scan or description, T-029) still decodes; columns the
+    /// app no longer uses are ignored and the coordinate system is tied to the room.
     func testDesignRoomRowDecodesWithoutARColumns() throws {
         let id = UUID()
         let row = Data(
@@ -43,8 +44,7 @@ final class AccessTests: XCTestCase {
              "created_by":"\(UUID())","created_by_org":null,"created_at":"2026-11-27T12:00:00Z"}
             """.utf8)
         let room = try JSONDecoder().decode(Room.self, from: row)
-        XCTAssertEqual(room.status, .inProgress)
-        XCTAssertEqual(room.area, 14)
+        XCTAssertEqual(room.description, "")
         XCTAssertNil(room.map_path)
         XCTAssertEqual(room.coordinate_id, id, "Without a stored coordinate system the room id stays stable")
         XCTAssertNoThrow(try room.validate())

@@ -225,8 +225,9 @@ final class SpatialTests: XCTestCase {
     func testAnnotationSerializationAndRoomIsolation() throws {
         let room = Room(project_id: UUID(), house_id: UUID(), name: "Kitchen")
         var item = Annotation(
-            room: room, kind: .text, pose: try transform(SIMD3(1, 2, 3)), title: "Paint wall", detail: "Blue")
-        item.status = .inProgress
+            room: room, kind: .line, pose: try transform(SIMD3(1, 2, 3)),
+            points: [Point3(.zero), Point3(SIMD3(1, 0, 0))])
+        item.strokes = [item.points]
         let restored = try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(item))
         XCTAssertEqual(restored, item)
         try restored.validate(room: room)
@@ -240,21 +241,12 @@ final class SpatialTests: XCTestCase {
         let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
         var item = Annotation(
             room: room, kind: .area, pose: .identity,
-            points: [Point3(.zero), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(1, 1, 0))], title: "Wall", detail: "")
+            points: [Point3(.zero), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(1, 1, 0))])
         try item.validate(room: room)
         item.points.append(Point3(SIMD3(0, 0, 1)))
         XCTAssertThrowsError(try item.validate(room: room))
         item.points = [Point3(.zero), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(2, 0, 0))]
         XCTAssertThrowsError(try item.validate(room: room))
-    }
-    func testTaskStatusAndPriorityPersist() throws {
-        let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
-        for status in TaskStatus.allCases {
-            var task = Annotation(room: room, kind: .marker, pose: .identity, title: "Repair", detail: "Check pipe")
-            task.status = status
-            task.priority = 2
-            XCTAssertEqual(try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(task)), task)
-        }
     }
     func testRoomMetadataRoundtripAndVersionRejection() throws {
         var room = Room(project_id: UUID(), house_id: UUID(), name: "Kitchen")
@@ -475,13 +467,13 @@ extension SpatialTests {
 }
 
 extension SpatialTests {
-    func testTypedLabelLengthMatchesCloudLimit() throws {
-        let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
-        var note = Annotation(
-            room: room, kind: .text, pose: .identity, title: String(repeating: "a", count: 240), detail: "")
-        try note.validate(room: room)
-        note.title.append("b")
-        XCTAssertThrowsError(try note.validate(room: room))
+    /// The database keeps descriptions to 4000 characters (T-029); the phone refuses longer ones before queueing.
+    func testRoomDescriptionLengthMatchesDatabaseLimit() throws {
+        var room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
+        room.description = String(repeating: "a", count: Room.maximumDescriptionLength)
+        XCTAssertNoThrow(try room.validate())
+        room.description.append("b")
+        XCTAssertThrowsError(try room.validate())
     }
 }
 
@@ -524,7 +516,7 @@ extension SpatialTests {
         let room = Room(project_id: UUID(), house_id: UUID(), name: "Room")
         let a = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(1, 0, 0))]
         let b = [Point3(SIMD3<Float>(5, 5, 0)), Point3(SIMD3(6, 5, 0))]
-        var drawing = Annotation(room: room, kind: .line, pose: .identity, points: a, title: "Zeichnung", detail: "")
+        var drawing = Annotation(room: room, kind: .line, pose: .identity, points: a)
         drawing.strokes = [a, b]
         try drawing.validate(room: room)
         XCTAssertEqual(try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(drawing)), drawing)
@@ -534,7 +526,7 @@ extension SpatialTests {
         XCTAssertNil(legacy.image)
         try legacy.validate(room: room)
         var image = Annotation(
-            room: room, kind: .image, pose: .identity, points: [Point3(.zero)], title: "Bild", detail: "")
+            room: room, kind: .image, pose: .identity, points: [Point3(.zero)])
         XCTAssertThrowsError(try image.validate(room: room))
         image.image = SpatialImage(path: "project/room/image.png", width: 0.4, height: 0.3)
         try image.validate(room: room)

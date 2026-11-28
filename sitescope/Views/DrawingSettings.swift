@@ -1,37 +1,5 @@
 import SwiftUI
 
-/// Sheet for the optional title, description and priority of a drawing.
-/// Done is disabled above the 240-character title limit.
-struct DrawingWorkDetails: View {
-    @Binding var title: String
-    @Binding var details: String
-    @Binding var priority: Int
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Work details (optional)") {
-                    TextField("Title", text: $title, axis: .vertical).lineLimit(1...3).accessibilityIdentifier(
-                        "drawing.title")
-                    TextField("Description", text: $details, axis: .vertical).lineLimit(3...8)
-                    Text("\(title.count) / 240 characters in title").font(.caption).foregroundStyle(
-                        title.count > 240 ? .red : .secondary)
-                    Picker("Priority", selection: $priority) {
-                        Text("Low").tag(0)
-                        Text("Normal").tag(1)
-                        Text("High").tag(2)
-                    }
-                }
-            }.navigationTitle("Work details").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }.disabled(title.count > 240)
-                    }
-                }
-        }
-    }
-}
-
 /// Fallback when ARKit cannot detect a surface: the user supplies the distance.
 /// The 0.1–10 m range rejects implausible values.
 struct DrawingPlacementSettings: View {

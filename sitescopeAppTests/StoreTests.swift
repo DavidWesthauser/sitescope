@@ -7,6 +7,10 @@ import XCTest
 #endif
 
 @MainActor final class StoreTests: XCTestCase {
+    static func temporaryFile() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("data.json")
+    }
     /// Without a server nobody can sign in, so the app shows only the sign-in screen with the reason.
     func testUnconfiguredStoreStaysSignedOutAndExplainsWhy() async throws {
         let store = Store()
@@ -18,15 +22,14 @@ import XCTest
             XCTFail("Expected an error without a server")
         } catch { XCTAssertFalse(store.signedIn) }
     }
-    func testOperationFailureReleasesBusyAndPreservesData() async {
-        let store = Store()
-        let project = Project(name: "Keep me")
-        store.projects = [project]
+    func testOperationFailureReleasesBusyAndPreservesData() async throws {
+        let store = Store(offlineFileURL: Self.temporaryFile())
+        let project = try await store.createProject(name: "Keep me")
         store.run { throw AppError.message("Network offline fixture") }
         XCTAssertTrue(store.busy)
         for _ in 0..<100 where store.busy { await Task.yield() }
         XCTAssertFalse(store.busy)
-        XCTAssertEqual(store.projects, [project])
+        XCTAssertEqual(store.projects.map(\.id), [project.id])
         XCTAssertEqual(store.error, "Network offline fixture")
     }
     func testActionStartedWhileBusyWaitsAndRuns() async {
@@ -62,11 +65,11 @@ import XCTest
             ar.localization.propose(.identity, method: .map)
             let points = [Point3(SIMD3<Float>(0, 0, 0)), Point3(SIMD3(1, 0, 0)), Point3(SIMD3(1, 1, 0))]
             let line = Annotation(
-                room: room, kind: .line, pose: .identity, points: points, title: "Drawing", detail: "")
+                room: room, kind: .line, pose: .identity, points: points)
             let area = Annotation(
-                room: room, kind: .area, pose: .identity, points: points, title: "Area marking", detail: "")
+                room: room, kind: .area, pose: .identity, points: points)
             let arrow = Annotation(
-                room: room, kind: .arrow, pose: .identity, points: [points[0], points[2]], title: "Drawing", detail: "")
+                room: room, kind: .arrow, pose: .identity, points: [points[0], points[2]])
             ar.annotations = [line, area, arrow]
             ar.confirm()
             let roots = ar.view.scene.anchors.flatMap { Array($0.children) }

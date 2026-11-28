@@ -1,49 +1,8 @@
 import Foundation
 
-/// Request bodies for the Supabase tables and RPCs in docs/DATABASE_API.md. Writes send only the columns clients
-/// may set ("Updatable columns"); the creator, timestamps and organizations are set by the server.
-/// Optional values are sent as `null`, never left out, so clearing a field works and RPCs get every argument.
-
-struct NewProject: Encodable {
-    let id: UUID
-    let name: String
-}
-
-struct NewHouse: Encodable {
-    let id: UUID
-    let project_id: UUID
-    let name: String
-}
-
-struct NewRoom: Encodable {
-    let room: Room
-    private enum Keys: String, CodingKey { case id, house_id, project_id, name, height, length, width, status }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: Keys.self)
-        try c.encode(room.id, forKey: .id)
-        try c.encode(room.house_id, forKey: .house_id)
-        try c.encode(room.project_id, forKey: .project_id)
-        try c.encode(room.name, forKey: .name)
-        try c.encode(room.height, forKey: .height)
-        try c.encode(room.length, forKey: .length)
-        try c.encode(room.width, forKey: .width)
-        try c.encode(room.status, forKey: .status)
-    }
-}
-
-/// Room fields a member may change (level ≥ 2): name, dimensions, status.
-struct RoomDetailsUpdate: Encodable {
-    let room: Room
-    private enum Keys: String, CodingKey { case name, height, length, width, status }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: Keys.self)
-        try c.encode(room.name, forKey: .name)
-        try c.encode(room.height, forKey: .height)
-        try c.encode(room.length, forKey: .length)
-        try c.encode(room.width, forKey: .width)
-        try c.encode(room.status, forKey: .status)
-    }
-}
+/// Request bodies for the rights RPCs and admin tables in docs/DATABASE_API.md. Synced records are sent as field
+/// dictionaries by `RemoteStore`. Optional values are sent as `null`, never left out, so clearing a field works and
+/// RPCs get every argument.
 
 struct ResponsibleUpdate: Encodable {
     let responsible_id: UUID

@@ -36,7 +36,7 @@ public enum AccessLevel: Int, Comparable, Codable, Sendable {
 
     public var label: String {
         switch self {
-        case .none: return "View only"
+        case .none: return "On the way to a shared room"
         case .external: return "External"
         case .member: return "Member"
         case .responsible: return "Responsible"
@@ -83,6 +83,10 @@ public enum AccessScope: Equatable, Sendable {
         case .house(_, let house): return house.name
         case .room(_, _, let room): return room.name
         }
+    }
+    /// Key for the phone's cache of levels, so rights are known offline.
+    public var cacheKey: String {
+        [project.id, houseID, roomID].map { $0?.uuidString.lowercased() ?? "-" }.joined(separator: "/")
     }
     /// Grants made exactly on this scope; inherited ones are listed where they were made.
     public func contains(_ grant: AccessGrant) -> Bool {

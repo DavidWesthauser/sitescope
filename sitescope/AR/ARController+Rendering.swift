@@ -104,14 +104,9 @@ extension ARController {
             let root = Entity()
             root.name = item.id.uuidString
             root.transform = Transform(matrix: item.pose.matrix)
-            let color: UIColor = item.status == .completed ? .systemGreen : .systemCyan
+            // Drawings carry no text (decided 2026-11-28), so nothing is labelled; one colour for all.
+            let color: UIColor = .systemCyan
             if item.kind == .marker { root.addChild(dot(.zero, color: color, radius: 0.025)) }
-            // Default titles (German and English) are not drawn as labels; only user-chosen titles are.
-            if item.kind == .text
-                || !["Drawing", "Zeichnung", "Area marking", "Fläche", "Bild", "Image"].contains(item.title)
-            {
-                root.addChild(label(item.title, at: .zero, color: color))
-            }
             let p = item.points.map(\.vector)
             if item.kind == .arrow, let first = p.first, let last = p.last, p.count >= 2 {
                 addArrow(first, last, normal: SIMD3(0, 0, 1), to: root, color: color)

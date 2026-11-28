@@ -50,14 +50,10 @@ struct ARScreen: View {
     private let startSession: Bool
     private var room: Room { ar.room }
     private var mode: ARMode { ar.mode }
-    @State private var title = ""
-    @State private var detail = ""
     @State private var replacing: Annotation?
-    @State private var priority = 1
     @State private var distance: Double = 1
     @State private var manualDistance = false
     @State private var importing = false
-    @State private var taskList = false
     @State private var closing = false
     @State private var saving = false
     @State private var tools = true
@@ -65,7 +61,6 @@ struct ARScreen: View {
     @State private var photoSelection: PhotosPickerItem?
     @State private var scanMore = false
     @State private var showingScanOptions = false
-    @State private var showingWorkDetails = false
     @State private var showingPlacement = false
     @State private var restartingScan = false
     @State private var showingScanGuide = false
@@ -112,13 +107,8 @@ struct ARScreen: View {
                         }.accessibilityLabel("Close")
                         Text(room.name).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8).frame(
                             maxWidth: .infinity)
-                        Button {
-                            ar.resumeCamera()
-                            taskList = true
-                        } label: {
-                            Image(systemName: "list.bullet").font(.title3.weight(.semibold)).frame(
-                                minWidth: 44, minHeight: 44)
-                        }.accessibilityLabel("Tasks")
+                        // Balances the Close button, so the room name stays centred.
+                        Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
                     }.padding(.horizontal, 8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 5) {
                         Label(
@@ -225,10 +215,6 @@ struct ARScreen: View {
         .task(id: room.scan_guide_jpeg) { scanGuideImage = room.scan_guide_jpeg.flatMap(ScanGuideImage.thumbnail) }
         .onDisappear { ar.stop() }
         .modifier(ARSessionFeedback(ar: ar))
-        .onChange(of: title) { _, value in ar.draftText = value }
-        .sheet(isPresented: $showingWorkDetails) {
-            DrawingWorkDetails(title: $title, details: $detail, priority: $priority)
-        }
         .sheet(isPresented: $showingPlacement) {
             DrawingPlacementSettings(measured: $manualDistance, distance: $distance)
         }
@@ -283,18 +269,6 @@ struct ARScreen: View {
                 }
             } catch { ar.error = error.localizedDescription }
         }
-        .sheet(isPresented: $taskList, onDismiss: reloadAfterSheet) {
-            NavigationStack {
-                List(ar.annotations) { item in
-                    NavigationLink {
-                        TaskEditor(item: item, room: room, manager: manager)
-                    } label: {
-                        Label(item.title, systemImage: item.status == .completed ? "checkmark.circle.fill" : "circle")
-                    }
-                }
-                .navigationTitle("Room tasks").toolbar { Button("Done") { taskList = false } }
-            }.environmentObject(store)
-        }
         .sheet(isPresented: $showingScanGuide) {
             NavigationStack {
                 ScrollView {
@@ -314,38 +288,54 @@ struct ARScreen: View {
                     }
             }
         }
-        .sheet(item: $ar.selected, onDismiss: reloadAfterSheet) { item in
-            NavigationStack {
-                TaskEditor(
-                    item: item, room: room, manager: manager,
-                    onReposition: mode == .editing && [.line, .area, .image].contains(item.kind)
-                        ? {
-                            guard ar.draft.isEmpty else {
-                                ar.error =
-                                    "Save or clear your current drawing before repositioning another instruction."
-                                return
-                            }
-                            replacing = item
-                            ar.clearDraft()
-                            ar.tool = item.kind
-                            title = item.title
-                            detail = item.detail
-                            priority = item.priority
-                            tools = true
-                            if item.kind == .image {
-                                let request = ar.beginImageRequest(clearExisting: true)
-                                Task {
-                                    defer { ar.finishImageRequest(request) }
-                                    do {
-                                        try await ar.restoreImageDraft(
-                                            item, repository: store.requireRepository(), request: request)
-                                    } catch {
-                                        if ar.imageRequestIsCurrent(request) { ar.error = error.localizedDescription }
-                                    }
-                                }
-                            }
-                        } : nil)
-            }.environmentObject(store)
+        // Tapping a drawing offers what can be done with it; drawings have no text of their own.
+        .confirmationDialog(
+            drawingTitle, isPresented: Binding(get: { ar.selected != nil }, set: { if !$0 { ar.selected = nil } }),
+            titleVisibility: .visible, presenting: ar.selected
+        ) { item in
+            if manager && mode == .editing {
+                Button("Reposition") { reposition(item) }
+            }
+            if manager {
+                Button("Delete Drawing", role: .destructive) {
+                    Task {
+                        do {
+                            try await store.deleteDrawing(item)
+                            await reload()
+                        } catch { ar.error = error.localizedDescription }
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+    private var drawingTitle: String {
+        switch ar.selected?.kind {
+        case .area: return "Marked Area"
+        case .image: return "Photo"
+        default: return "Drawing"
+        }
+    }
+    /// Starts placing the drawing again; saving replaces it under the same id.
+    private func reposition(_ item: Annotation) {
+        guard ar.draft.isEmpty else {
+            ar.error = "Save or clear your current drawing before repositioning another one."
+            return
+        }
+        replacing = item
+        ar.clearDraft()
+        ar.tool = item.kind
+        tools = true
+        if item.kind == .image {
+            let request = ar.beginImageRequest(clearExisting: true)
+            Task {
+                defer { ar.finishImageRequest(request) }
+                do {
+                    try await ar.restoreImageDraft(item, repository: store.requireRepository(), request: request)
+                } catch {
+                    if ar.imageRequestIsCurrent(request) { ar.error = error.localizedDescription }
+                }
+            }
         }
     }
     private var toolsContent: some View {
@@ -534,14 +524,15 @@ struct ARScreen: View {
     private var editorTools: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let replacing {
-                Text("Repositioning: \(replacing.title)").font(.headline)
+                Text(
+                    "Repositioning the \(replacing.kind == .area ? "area" : replacing.kind == .image ? "photo" : "drawing")"
+                )
+                .font(.headline)
                 Button("Cancel") {
                     self.replacing = nil
                     ar.cancelImageRequest()
                     ar.clearDraft()
                     ar.resumeCamera()
-                    title = ""
-                    detail = ""
                 }
             }
             Picker("Tool", selection: Binding(get: { ar.tool }, set: { selectTool($0) })) {
@@ -595,8 +586,6 @@ struct ARScreen: View {
                 Label("Drawing surface locked", systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
             }
             if ar.tool != .line { DisclosureGroup("Precise placement") { captureControls } }
-            Button("Work details", systemImage: "text.alignleft") { showingWorkDetails = true }.font(.subheadline)
-                .frame(minHeight: 44)
         }
     }
     private var lockButton: some View {
@@ -654,7 +643,6 @@ struct ARScreen: View {
         Task {
             defer { saving = false }
             do {
-                let label = title.trimmingCharacters(in: .whitespacesAndNewlines)
                 var attachment: SpatialImage?
                 if ar.tool == .image {
                     guard ar.imageData != nil else {
@@ -665,24 +653,15 @@ struct ARScreen: View {
                         "\(room.project_id.uuidString.lowercased())/\(room.id.uuidString.lowercased())/\(UUID().uuidString.lowercased()).png"
                     attachment = SpatialImage(path: path, width: ar.imageWidth, height: ar.imageHeight)
                 }
-                var item = try ar.makeAnnotation(
-                    kind: ar.tool,
-                    title: label.isEmpty
-                        ? (ar.tool == .area ? "Area marking" : (ar.tool == .image ? "Image" : "Drawing")) : label,
-                    detail: detail, priority: priority, image: attachment)
+                var item = try ar.makeAnnotation(kind: ar.tool, image: attachment)
                 if let attachment, let data = ar.imageData {
                     try await store.uploadAsset(path: attachment.path, data: data, type: "image/png")
                 }
-                if let replacing {
-                    item.id = replacing.id
-                    item.status = replacing.status
-                }
-                try await store.saveInstruction(item, room: room, replacing: replacing != nil)
+                if let replacing { item.id = replacing.id }
+                try await store.saveDrawing(item, room: room)
                 replacing = nil
                 ar.clearDraft()
                 ar.resumeCamera()
-                title = ""
-                detail = ""
                 await reload()
             } catch { ar.error = error.localizedDescription }
         }
@@ -702,8 +681,6 @@ struct ARScreen: View {
             }
         }
     }
-    /// Sheets can change tasks (status, deletion), so the AR scene reloads its annotations when one closes.
-    private func reloadAfterSheet() { Task { await reload() } }
 
     private func reload() async {
         do {
