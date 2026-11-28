@@ -5,16 +5,18 @@ public enum AccessRole: String, Codable, CaseIterable, Identifiable, Sendable {
     case member
     case external
     public var id: String { rawValue }
+    /// Named like Apple's sharing roles; the database names are `member` and `external`.
     public var label: String {
         switch self {
-        case .member: return "Member"
-        case .external: return "External"
+        case .member: return "Can Edit"
+        case .external: return "View Only"
         }
     }
+    /// The same sentence wherever the role is explained (Add Person, the access footers).
     public var summary: String {
         switch self {
-        case .member: return "Can add rooms and edit their name, size and status."
-        case .external: return "Can view and comment."
+        case .member: return "Can add and edit rooms, scans and drawings."
+        case .external: return "Can view everything, but not change it."
         }
     }
 }

@@ -66,9 +66,7 @@ import Foundation
         let text = error.localizedDescription
         let schema = ["schema cache", "does not exist", "column", "relation"]
         guard schema.contains(where: { text.localizedCaseInsensitiveContains($0) }) else { return text }
-        return deleting
-            ? "The server can’t delete this yet. It is gone from this iPhone; the server deletes it once it is updated."
-            : "The server can’t store this yet. It stays on this iPhone and uploads once the server is updated."
+        return deleting ? "Can’t be deleted online yet." : "Can’t be stored online yet."
     }
 
     static func isOffline(_ error: Error) -> Bool {

@@ -178,9 +178,12 @@ public struct OutboxItem: Codable, Equatable, Identifiable, Sendable {
     public var failures: Int = 0
     /// Set when the server refused the change; the user can retry it.
     public var lastError: String?
-    public init(key: RecordKey, action: Action) {
+    /// The record's name when it was deleted, so a failed delete can still say what it was.
+    public var label: String?
+    public init(key: RecordKey, action: Action, label: String? = nil) {
         self.key = key
         self.action = action
+        self.label = label
     }
 }
 
@@ -188,7 +191,8 @@ public enum Outbox {
     /// Adds a change to the queue without duplicates. A delete replaces a waiting upload; a delete of a record that
     /// never reached the server just removes it from the queue.
     public static func enqueue(
-        _ action: OutboxItem.Action, for key: RecordKey, existsOnServer: Bool, into queue: inout [OutboxItem]
+        _ action: OutboxItem.Action, for key: RecordKey, existsOnServer: Bool, label: String? = nil,
+        into queue: inout [OutboxItem]
     ) {
         let waiting = queue.firstIndex { $0.key == key }
         switch action {
@@ -202,7 +206,7 @@ public enum Outbox {
             }
         case .delete:
             if let waiting { queue.remove(at: waiting) }
-            if existsOnServer { queue.append(OutboxItem(key: key, action: .delete)) }
+            if existsOnServer { queue.append(OutboxItem(key: key, action: .delete, label: label)) }
         }
     }
     /// Upload order: creates and edits parents first; deletes children first, after all edits.

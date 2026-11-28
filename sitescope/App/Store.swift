@@ -148,10 +148,34 @@ import SwiftUI
         guard let backend else {
             throw AppError.message("No server is configured. Add it to Secrets.xcconfig (docs/BACKEND_SETUP.md).")
         }
-        let active = try await backend.authenticate(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password, register: register)
+        let active: Bool
+        do {
+            active = try await backend.authenticate(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password, register: register)
+        } catch let failure as HTTPFailure {
+            throw AppError.message(Self.signInMessage(failure, register: register))
+        } catch  where SyncEngine.isOffline(error) {
+            throw AppError.message("You’re offline. Connect to the internet to sign in.")
+        }
         if active, let user = backend.user { openAccount(user.id) }
         return active
+    }
+    /// Plain sentences for the usual sign-in problems instead of the server's codes.
+    private static func signInMessage(_ failure: HTTPFailure, register: Bool) -> String {
+        let text = failure.message.lowercased()
+        if text.contains("invalid login") { return "The email or password is wrong." }
+        if text.contains("not confirmed") { return "Confirm your email first. Check your inbox for the link." }
+        if text.contains("already registered") {
+            return "There is already an account with this email. Sign in instead."
+        }
+        if text.contains("password") && register { return failure.message }
+        return failure.message
+    }
+    func requestPasswordReset(email: String) async throws {
+        guard let backend else { throw AppError.message("Sign-in isn’t available in this build.") }
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard address.contains("@") else { throw AppError.message("Enter your email first.") }
+        try await backend.requestPasswordReset(email: address)
     }
     /// Signs out. The account's copy and its waiting changes stay on the phone for the next sign-in.
     func signOut() async {
@@ -199,16 +223,16 @@ import SwiftUI
     var failedItems: [(key: RecordKey, name: String, reason: String)] {
         outbox.compactMap { item in
             guard let reason = item.lastError else { return nil }
-            let kind =
-                ["project": "Project", "house": "House", "room": "Room", "drawing": "Drawing"][
-                    item.key.entity.rawValue] ?? "Item"
             let name =
                 item.action == .delete
-                ? "\(kind) deleted on this iPhone" : (storage?.data.name(of: item.key) ?? kind)
+                ? "Deleted: \(item.label ?? storage?.data.name(of: item.key) ?? "item")"
+                : (storage?.data.name(of: item.key) ?? "Item")
             return (item.key, name, reason)
         }
     }
     var waitingChanges: Int { outbox.count }
+    /// Waiting and not refused, so Settings does not count failed changes twice.
+    var pendingChanges: Int { outbox.filter { $0.lastError == nil }.count }
     var failedChanges: Int { outbox.filter { $0.lastError != nil }.count }
 
     /// Names, admin state and the level on every scope, cached so they work offline.

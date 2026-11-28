@@ -88,7 +88,7 @@ struct RoomView: View {
                         RetryMenuButton(key: RecordKey(.room, room.id))
                         Button("Rename", systemImage: "pencil") { renaming = true }
                         if level.canManage {
-                            Button("People", systemImage: "person.2") { showingPeople = true }
+                            Button("Share", systemImage: "person.crop.circle.badge.plus") { showingPeople = true }
                                 .disabled(!store.isOnline)
                             Divider()
                             Button("Delete Room", systemImage: "trash", role: .destructive) { deleting = true }
@@ -111,7 +111,9 @@ struct RoomView: View {
         }
         .onDisappear { saveDescription(of: room) }
         .navigationDestination(isPresented: $showingPeople) { AccessView(scope: .room(project, house, room)) }
-        .namePrompt("Rename Room", action: "Rename", isPresented: $renaming, initial: room.name) { name in
+        .namePrompt(
+            "Rename Room", placeholder: "Room Name", action: "Rename", isPresented: $renaming, initial: room.name
+        ) { name in
             store.run { try await store.renameRoom(room, name: name) }
         }
         .deleteConfirmation(

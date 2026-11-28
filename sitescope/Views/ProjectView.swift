@@ -35,15 +35,8 @@ struct ProjectView: View {
             }
             Section {
                 if houses.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Houses", systemImage: "house")
-                    } description: {
-                        Text(
-                            level.canManage
-                                ? "Add the buildings of this project." : "No houses are shared with you yet.")
-                    } actions: {
-                        if level.canManage { Button("New House") { adding = true }.buttonStyle(.borderedProminent) }
-                    }
+                    Text(level.canManage ? "No houses yet. Add one with +." : "No houses are shared with you yet.")
+                        .foregroundStyle(.secondary)
                 }
                 ForEach(houses) { house in
                     NavigationLink(value: Route.house(house.id)) {
@@ -80,7 +73,7 @@ struct ProjectView: View {
                     Menu("More", systemImage: "ellipsis.circle") {
                         RetryMenuButton(key: RecordKey(.project, project.id))
                         Button("Rename", systemImage: "pencil") { renaming = true }
-                        Button("People", systemImage: "person.2") { showingPeople = true }
+                        Button("Share", systemImage: "person.crop.circle.badge.plus") { showingPeople = true }
                             .disabled(!store.isOnline)
                         Divider()
                         Button("Delete Project", systemImage: "trash", role: .destructive) { deleting = true }
@@ -90,14 +83,17 @@ struct ProjectView: View {
             ToolbarItem(placement: .status) { SyncStatusView() }
         }
         .navigationDestination(isPresented: $showingPeople) { AccessView(scope: .project(project)) }
-        .namePrompt("New House", action: "Create", isPresented: $adding) { name in
+        .namePrompt("New House", placeholder: "House Name", action: "Create", isPresented: $adding) { name in
             store.run { try await store.createHouse(in: project, name: name) }
         }
-        .namePrompt("Rename Project", action: "Rename", isPresented: $renaming, initial: project.name) { name in
+        .namePrompt(
+            "Rename Project", placeholder: "Project Name", action: "Rename", isPresented: $renaming,
+            initial: project.name
+        ) { name in
             store.run { try await store.renameProject(project, name: name) }
         }
         .namePrompt(
-            "Rename House", action: "Rename",
+            "Rename House", placeholder: "House Name", action: "Rename",
             isPresented: Binding(get: { renamingHouse != nil }, set: { if !$0 { renamingHouse = nil } }),
             initial: renamingHouse?.name ?? ""
         ) { name in

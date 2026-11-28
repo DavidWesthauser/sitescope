@@ -73,7 +73,7 @@ struct ProjectListView: View {
                 case .room(let id): RoomView(roomID: id)
                 }
             }
-            .namePrompt("New Project", action: "Create", isPresented: $creating) { name in
+            .namePrompt("New Project", placeholder: "Project Name", action: "Create", isPresented: $creating) { name in
                 store.run {
                     // Like houses and rooms, the new project appears in the list; it does not open by itself.
                     _ = try await store.createProject(name: name)
@@ -81,7 +81,7 @@ struct ProjectListView: View {
                 }
             }
             .namePrompt(
-                "Rename Project", action: "Rename",
+                "Rename Project", placeholder: "Project Name", action: "Rename",
                 isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
                 initial: renaming?.name ?? ""
             ) { name in

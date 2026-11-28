@@ -38,15 +38,11 @@ struct HouseView: View {
             }
             Section {
                 if rooms.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Rooms", systemImage: "door.left.hand.open")
-                    } description: {
-                        Text(level.canContribute ? "Add a room, then scan it." : "No rooms are shared with you yet.")
-                    } actions: {
-                        if level.canContribute {
-                            Button("New Room") { adding = true }.buttonStyle(.borderedProminent)
-                        }
-                    }
+                    Text(
+                        level.canContribute
+                            ? "No rooms yet. Add one with +, then scan it." : "No rooms are shared with you yet."
+                    )
+                    .foregroundStyle(.secondary)
                 }
                 ForEach(rooms) { room in
                     let scope = AccessScope.room(project, house, room)
@@ -89,7 +85,7 @@ struct HouseView: View {
                     Menu("More", systemImage: "ellipsis.circle") {
                         RetryMenuButton(key: RecordKey(.house, house.id))
                         Button("Rename", systemImage: "pencil") { renaming = true }
-                        Button("People", systemImage: "person.2") { showingPeople = true }
+                        Button("Share", systemImage: "person.crop.circle.badge.plus") { showingPeople = true }
                             .disabled(!store.isOnline)
                         Divider()
                         Button("Delete House", systemImage: "trash", role: .destructive) { deleting = true }
@@ -99,14 +95,16 @@ struct HouseView: View {
             ToolbarItem(placement: .status) { SyncStatusView() }
         }
         .navigationDestination(isPresented: $showingPeople) { AccessView(scope: .house(project, house)) }
-        .namePrompt("New Room", action: "Create", isPresented: $adding) { name in
+        .namePrompt("New Room", placeholder: "Room Name", action: "Create", isPresented: $adding) { name in
             store.run { try await store.createRoom(in: house, name: name) }
         }
-        .namePrompt("Rename House", action: "Rename", isPresented: $renaming, initial: house.name) { name in
+        .namePrompt(
+            "Rename House", placeholder: "House Name", action: "Rename", isPresented: $renaming, initial: house.name
+        ) { name in
             store.run { try await store.renameHouse(house, name: name) }
         }
         .namePrompt(
-            "Rename Room", action: "Rename",
+            "Rename Room", placeholder: "Room Name", action: "Rename",
             isPresented: Binding(get: { renamingRoom != nil }, set: { if !$0 { renamingRoom = nil } }),
             initial: renamingRoom?.name ?? ""
         ) { name in

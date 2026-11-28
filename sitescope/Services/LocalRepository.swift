@@ -17,7 +17,8 @@ import Foundation
         changed?()
     }
     private static func queue(_ action: OutboxItem.Action, _ key: RecordKey, in data: inout LocalData) {
-        Outbox.enqueue(action, for: key, existsOnServer: data.isOnServer(key), into: &data.outbox)
+        let label = action == .delete ? data.name(of: key) : nil
+        Outbox.enqueue(action, for: key, existsOnServer: data.isOnServer(key), label: label, into: &data.outbox)
     }
     /// Forgets the queued changes and server versions of records removed together with their parent.
     private static func forget(_ entity: SyncEntity, _ ids: [UUID], in data: inout LocalData) {
@@ -56,8 +57,8 @@ import Foundation
             data.drawings.removeAll { drawings.contains($0.id) }
             data.rooms.removeAll { $0.project_id == project.id }
             data.houses.removeAll { $0.project_id == project.id }
-            data.projects.removeAll { $0.id == project.id }
             Self.queue(.delete, RecordKey(.project, project.id), in: &data)
+            data.projects.removeAll { $0.id == project.id }
         }
     }
 
@@ -86,8 +87,8 @@ import Foundation
             Self.forget(.drawing, drawings, in: &data)
             data.drawings.removeAll { drawings.contains($0.id) }
             data.rooms.removeAll { $0.house_id == house.id }
-            data.houses.removeAll { $0.id == house.id }
             Self.queue(.delete, RecordKey(.house, house.id), in: &data)
+            data.houses.removeAll { $0.id == house.id }
         }
     }
 
@@ -123,8 +124,8 @@ import Foundation
             let drawings = data.drawings.filter { $0.room_id == room.id }.map(\.id)
             Self.forget(.drawing, drawings, in: &data)
             data.drawings.removeAll { $0.room_id == room.id }
-            data.rooms.removeAll { $0.id == room.id }
             Self.queue(.delete, RecordKey(.room, room.id), in: &data)
+            data.rooms.removeAll { $0.id == room.id }
         }
     }
     /// A published scan and its coordinate system never change: drawings are placed in them. A new scan of a

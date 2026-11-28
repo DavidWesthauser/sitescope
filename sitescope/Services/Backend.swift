@@ -77,6 +77,11 @@ struct Configuration {
         let access = try await token()
         return try await raw(path, method: method, body: body, token: access, prefer: prefer)
     }
+    /// Sends Supabase's password reset email; the link lets the person choose a new password.
+    func requestPasswordReset(email: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["email": email])
+        _ = try await raw("/auth/v1/recover", method: "POST", body: body)
+    }
     func authenticate(email: String, password: String, register: Bool) async throws -> Bool {
         let body = try JSONSerialization.data(withJSONObject: ["email": email, "password": password])
         let data = try await raw(

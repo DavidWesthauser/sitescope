@@ -37,16 +37,26 @@ struct SyncStatusView: View {
             } else if store.isSyncing {
                 Text("Syncing…").font(.caption)
             } else if store.failedChanges > 0 {
-                Text(
-                    store.failedChanges == 1
-                        ? "1 change couldn’t upload" : "\(store.failedChanges) changes couldn’t upload"
-                )
-                .font(.caption).foregroundStyle(Color("Warning"))
+                // The status itself is the way to try again, where people look when something is wrong.
+                Button {
+                    Task { await store.syncNow() }
+                } label: {
+                    Text(
+                        store.failedChanges == 1
+                            ? "1 change couldn’t upload · Retry"
+                            : "\(store.failedChanges) changes couldn’t upload · Retry"
+                    )
+                    .font(.caption)
+                }
+                .tint(Color("Warning"))
+                .accessibilityHint("Tries the changes that couldn’t upload again.")
             } else if store.waitingChanges > 0 {
                 Text(waitingText).font(.caption)
             } else if let date = store.lastSync {
                 Text("Updated \(date, format: .relative(presentation: .named))").font(.caption)
                     .foregroundStyle(.secondary)
+            } else {
+                Text("Up to date").font(.caption).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
